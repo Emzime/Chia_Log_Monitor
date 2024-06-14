@@ -8,10 +8,11 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-log_pattern = re.compile(
-    r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
-log_data = defaultdict(list)
+# Chemin du log par défaut
 default_log_file = r'\\VM-CHIA\ChiaLog\debug.log'
+
+log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
+log_data = defaultdict(list)
 
 
 def parse_log_line(line):
@@ -87,7 +88,7 @@ class LogMonitorApp:
         self.frame = tk.Frame(root)
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.load_button = tk.Button(self.frame, text="Load Log File", command=self.load_log_file)
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file)
         self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky=tk.N)
 
         self.top_frame = tk.Frame(self.frame)
@@ -176,7 +177,7 @@ class LogMonitorApp:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
 
     def load_log_file(self):
-        file_path = filedialog.askopenfilename()
+        file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log"), ("All Files", "*.*")])
         if file_path:
             read_log_file(file_path)
             self.update_ui()
@@ -208,12 +209,12 @@ class LogMonitorApp:
         summary = print_summary()
         self.summary_text.delete(1.0, tk.END)
         self.summary_text.insert(tk.END, summary)
-        self.summary_text.see(tk.END)  # Fait défiler jusqu'à la fin
+        self.summary_text.see(tk.END)
 
         stats = calculate_summary_stats()
         self.stats_text.delete(1.0, tk.END)
         self.stats_text.insert(tk.END, stats)
-        self.stats_text.see(tk.END)  # Fait défiler jusqu'à la fin
+        self.stats_text.see(tk.END)
 
         self.plot_data()
 
@@ -244,13 +245,16 @@ class LogMonitorApp:
         self.ax1.plot(filtered_timestamps, filtered_time_taken)
         self.ax1.set_title('Temps en secondes sur la dernière heure')
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        self.ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))  # Intervalles de 10 minutes
+        self.ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
         self.fig1.autofmt_xdate()
 
         self.ax2.plot(filtered_timestamps, filtered_proofs_found)
         self.ax2.set_title('Preuves trouvées sur la dernière heure')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))  # Intervalles de 10 minutes
+        # Set X axis tick interval
+        self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
+        # Set Y axis tick interval
+        self.ax2.yaxis.set_major_locator(plt.MultipleLocator(1))
         self.fig2.autofmt_xdate()
 
         # Redessine le canevas
