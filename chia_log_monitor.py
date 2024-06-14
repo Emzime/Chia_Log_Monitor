@@ -6,6 +6,7 @@ from tkinter import filedialog, Scrollbar, Text
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+import mplcursors
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Chemin du log par défaut
@@ -66,17 +67,65 @@ def calculate_summary_stats():
     min_time_taken = min(log_data['time_taken'])
     max_time_taken = max(log_data['time_taken'])
     total_proofs_found = sum(log_data['proofs_found'])
+    total_plots = log_data['total_plots'][-1] if log_data['total_plots'] else 0
+
+    # Filtrer les données pour les temps <= 8 secondes et > 8 secondes
+    time_taken_le_8 = [time for time in log_data['time_taken'] if time <= 8]
+    time_taken_gt_8 = [time for time in log_data['time_taken'] if time > 8]
+
+    # Calculer la quantité de time_taken pour <= 8 secondes et > 8 secondes
+    total_count_le_8 = len(time_taken_le_8)
+    total_count_gt_8 = len(time_taken_gt_8)
+
+    # Calculer le temps écoulé entre la première et la dernière ligne du log
+    first_timestamp = log_data['timestamp'][0]
+    last_timestamp = log_data['timestamp'][-1]
+    elapsed_time = last_timestamp - first_timestamp
+
+    # Formater le temps écoulé
+    elapsed_time_formatted = format_elapsed_time(elapsed_time)
 
     summary_stats = (
-        f"=[ Statistiques ]=\n"
+        "\n[ Infos Farmer ]\n"
+        f"Total des parcelles: {total_plots}\n"
+        "\n[ Statistiques ]\n"
         f"Total des entrées: {total_entries}\n"
         f"Total des preuves trouvées: {total_proofs_found}\n"
+        "\n[ Temps ]\n"
         f"Durée minimale: {min_time_taken:.2f} secondes\n"
         f"Temps moyen: {avg_time_taken:.2f} secondes\n"
-        f"Temps maximum: {max_time_taken:.2f} secondes\n\n"
+        f"Temps maximum: {max_time_taken:.2f} secondes\n"
+        "\n[ Temps de preuves ]\n"
+        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
+        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n"
+        f"Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
+        f"\n"
     )
 
     return summary_stats
+
+
+# Fonction pour formater le temps écoulé en jours, heures, minutes et secondes
+def format_elapsed_time(elapsed_time):
+    days = elapsed_time.days
+    hours, remainder = divmod(elapsed_time.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    formatted_time = ""
+    if days > 0:
+        formatted_time += f"{days} jour{'s' if days > 1 else ''} "
+    if hours > 0:
+        formatted_time += f"{hours} heure{'s' if hours > 1 else ''} "
+    if minutes > 0:
+        formatted_time += f"{minutes} minute{'s' if minutes > 1 else ''} "
+
+    # Gérer l'affichage des secondes avec précision
+    if seconds.is_integer():
+        formatted_time += f"{int(seconds)} seconde{'s' if seconds != 1 else ''}"
+    else:
+        formatted_time += f"{seconds:.2f} secondes"
+
+    return formatted_time
 
 
 class LogMonitorApp:
@@ -92,7 +141,7 @@ class LogMonitorApp:
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
         self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file, bg='#999999', fg='#191F1F')
-        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky=tk.N)
+        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 0), sticky=tk.N)
 
         self.top_frame = tk.Frame(self.frame, bg='#191F1F')
         self.top_frame.grid(row=1, column=0, sticky=tk.NSEW)
@@ -168,6 +217,9 @@ class LogMonitorApp:
 
         self.maximize_window()
 
+        # Initialize cursor attributes
+        self.cursor1 = None
+
         # Load default log file and start periodic update
         self.load_default_log_file()
         self.update_periodically()
@@ -230,32 +282,39 @@ class LogMonitorApp:
         start_time = now - datetime.timedelta(hours=1)
 
         # Filtrer les données pour ne garder que celles dans l'intervalle de la dernière heure
-        filtered_timestamps = []
-        filtered_time_taken = []
-        filtered_proofs_found = []
+        filtered_data = {
+            '<= 8 sec': [],
+            '> 8 sec': []
+        }
 
-        filtered_timestamps_above_8 = []
-        filtered_time_taken_above_8 = []
-        filtered_proofs_found_above_8 = []
-
-        for timestamp, time_taken, proofs_found in zip(log_data['timestamp'], log_data['time_taken'], log_data['proofs_found']):
+        for timestamp, time_taken, proofs_found, eligible_plots in zip(log_data['timestamp'], log_data['time_taken'], log_data['proofs_found'], log_data['eligible_plots']):
             if timestamp >= start_time:
-                if time_taken > 8:
-                    filtered_timestamps_above_8.append(timestamp)
-                    filtered_time_taken_above_8.append(time_taken)
-                    filtered_proofs_found_above_8.append(proofs_found)
+                if time_taken <= 8:
+                    filtered_data['<= 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
                 else:
-                    filtered_timestamps.append(timestamp)
-                    filtered_time_taken.append(time_taken)
-                    filtered_proofs_found.append(proofs_found)
+                    filtered_data['> 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
 
         # Efface les tracés précédents
         self.ax1.clear()
         self.ax2.clear()
 
-        # Met à jour les données dans les tracés existants
-        self.ax1.plot(filtered_timestamps, filtered_time_taken, color='#17D283', label='<= 8 secondes')
-        self.ax1.plot(filtered_timestamps_above_8, filtered_time_taken_above_8, color='#FF4500', label='> 8 secondes')
+        # Plot pour <= 8 secondes
+        timestamps_le_8 = [data[0] for data in filtered_data['<= 8 sec']]
+        time_taken_le_8 = [data[1] for data in filtered_data['<= 8 sec']]
+        proofs_found_le_8 = [data[2] for data in filtered_data['<= 8 sec']]
+        eligible_plots_le_8 = [data[3] for data in filtered_data['<= 8 sec']]
+        self.ax1.plot(timestamps_le_8, time_taken_le_8, color='#17D283', label='<= 8 secondes')
+        self.ax2.plot(timestamps_le_8, proofs_found_le_8, color='#17D283', label='<= 8 secondes')
+
+        # Plot pour > 8 secondes
+        timestamps_gt_8 = [data[0] for data in filtered_data['> 8 sec']]
+        time_taken_gt_8 = [data[1] for data in filtered_data['> 8 sec']]
+        proofs_found_gt_8 = [data[2] for data in filtered_data['> 8 sec']]
+        eligible_plots_gt_8 = [data[3] for data in filtered_data['> 8 sec']]
+        self.ax1.plot(timestamps_gt_8, time_taken_gt_8, color='#FF4500', label='> 8 secondes')
+        self.ax2.plot(timestamps_gt_8, proofs_found_gt_8, color='#FF4500', label='> 8 secondes')
+
+        # Configurer le reste du graphique
         self.ax1.axhline(y=8, color='white', linestyle='--', linewidth=1)
         self.ax1.set_title('Temps en secondes sur la dernière heure', color='white')
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
@@ -263,8 +322,6 @@ class LogMonitorApp:
         self.ax1.legend(loc='upper right')
         self.fig1.autofmt_xdate()
 
-        self.ax2.plot(filtered_timestamps, filtered_proofs_found, color='#17D283', label='<= 8 secondes')
-        self.ax2.plot(filtered_timestamps_above_8, filtered_proofs_found_above_8, color='#FF4500', label='> 8 secondes')
         self.ax2.set_title('Preuves trouvées sur la dernière heure', color='white')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
         self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
@@ -295,6 +352,33 @@ class LogMonitorApp:
         self.ax1.yaxis.label.set_color('white')
         self.ax2.xaxis.label.set_color('white')
         self.ax2.yaxis.label.set_color('white')
+
+        # Gérer les tooltips avec mplcursors sur self.ax1
+        if self.cursor1:
+            self.cursor1.visible = False
+
+        self.cursor1 = mplcursors.cursor(self.ax1, hover=True)
+
+        @self.cursor1.connect("add")
+        def on_add_cursor1(sel, tooltip_color='white', face_color='black'):
+            idx = int(sel.index)
+            if idx < len(timestamps_gt_8):
+                timestamp_gt_8 = timestamps_gt_8[idx].strftime('%d-%m-%Y %H:%M:%S')
+                sel.annotation.set(text=f"Parcelles éligibles: {eligible_plots_gt_8[idx]}\n"
+                                        f"Temps: {time_taken_gt_8[idx]:.2f} s\n"
+                                        f"{timestamp_gt_8}",
+                                   color=tooltip_color,
+                                   bbox=dict(facecolor=face_color, edgecolor='none'),
+                                   ha='left')
+            else:
+                idx -= len(timestamps_gt_8)
+                timestamp_le_8 = timestamps_le_8[idx].strftime('%d-%m-%Y %H:%M:%S')
+                sel.annotation.set(text=f"Parcelles éligibles: {eligible_plots_le_8[idx]}\n"
+                                        f"Temps: {time_taken_le_8[idx]:.2f} s\n"
+                                        f"{timestamp_le_8}",
+                                   color=tooltip_color,
+                                   bbox=dict(facecolor=face_color, edgecolor='none'),
+                                   ha='left')
 
         # Redessine le canevas
         self.canvas1.draw()
