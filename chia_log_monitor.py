@@ -13,7 +13,12 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 default_log_file = r'\\VM-CHIA\ChiaLog\debug.log'
 
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
+pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
+farmer_info_pattern = re.compile(r"GET /farmer response: ({.*})")
+
 log_data = defaultdict(list)
+pool_info = {}
+farmer_info = {}
 
 
 def parse_log_line(line):
@@ -29,6 +34,27 @@ def parse_log_line(line):
     return None
 
 
+def parse_pool_info(line):
+    match = pool_info_pattern.search(line)
+    if match:
+        info = eval(match.group(1))  # Using eval for simplicity, but json.loads is safer for actual use
+        pool_info['name'] = info.get('name')
+        pool_info['discord'] = info.get('description').split(' ')[-1].strip('()')
+        pool_info['fee'] = info.get('fee')
+        return True
+    return False
+
+
+def parse_farmer_info(line):
+    match = farmer_info_pattern.search(line)
+    if match:
+        info = eval(match.group(1))  # Using eval for simplicity, but json.loads is safer for actual use
+        farmer_info['current_difficulty'] = info.get('current_difficulty')
+        farmer_info['current_points'] = info.get('current_points')
+        return True
+    return False
+
+
 def read_log_file(file_path):
     log_data.clear()
     with open(file_path, 'r') as file:
@@ -41,6 +67,9 @@ def read_log_file(file_path):
                 log_data['proofs_found'].append(proofs_found)
                 log_data['time_taken'].append(time_taken)
                 log_data['total_plots'].append(total_plots)
+            else:
+                parse_pool_info(line)
+                parse_farmer_info(line)
 
 
 def print_summary():
@@ -85,21 +114,56 @@ def calculate_summary_stats():
     # Formater le temps écoulé
     elapsed_time_formatted = format_elapsed_time(elapsed_time)
 
+    # Extraire les informations supplémentaires
+    pool_name = pool_info.get('name', 'N/A')
+    pool_discord = pool_info.get('discord', 'N/A')
+    pool_fee = pool_info.get('fee', 'N/A')
+    current_difficulty = farmer_info.get('current_difficulty', 'N/A')
+    current_points = farmer_info.get('current_points', 'N/A')
+
+    # Calculer le temps entre les changements de points
+    points_timestamps = []
+    last_points = None
+    for timestamp, points in zip(log_data['timestamp'], log_data.get('points', [])):
+        if points != last_points:
+            points_timestamps.append(timestamp)
+            last_points = points
+
+    points_intervals = [
+        (points_timestamps[i] - points_timestamps[i - 1]).total_seconds()
+        for i in range(1, len(points_timestamps))
+    ]
+
+    if points_intervals:
+        avg_points_interval = sum(points_intervals) / len(points_intervals)
+        points_interval_formatted = format_elapsed_time(datetime.timedelta(seconds=avg_points_interval))
+    else:
+        points_interval_formatted = 'En attente'
+
     summary_stats = (
-        "\n[ Infos Farmer ]\n"
-        f"Total des parcelles: {total_plots}\n"
-        "\n[ Statistiques ]\n"
-        f"Total des entrées: {total_entries}\n"
-        f"Total des preuves trouvées: {total_proofs_found}\n"
-        "\n[ Temps ]\n"
+        "[ Infos sur la pool ]\n"
+        f"Nom: {pool_name}\n"
+        f"Discord: {pool_discord}\n"
+        f"Fee: {pool_fee} xch\n"
+        
+        "\n[ Infos sur la ferme ]\n"
+        f"Total de parcelles: {total_plots}\n"
+        f"Difficulté de la ferme: {current_difficulty}\n"
+        f"Points de la ferme: {current_points}\n"
+        f"Temps moyen entre changements de points: {points_interval_formatted}\n"
+        
+        "\n[ Infos sur les partiels ]\n"
+        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
+        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n\n"
+        
         f"Durée minimale: {min_time_taken:.2f} secondes\n"
         f"Temps moyen: {avg_time_taken:.2f} secondes\n"
         f"Temps maximum: {max_time_taken:.2f} secondes\n"
-        "\n[ Temps de preuves ]\n"
-        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
-        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n"
+        
+        "\n[ Autres données ]\n"
+        f"Total des entrées: {total_entries}\n"
+        f"Total des preuves trouvées: {total_proofs_found}\n"
         f"Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
-        f"\n"
     )
 
     return summary_stats
@@ -135,45 +199,51 @@ class LogMonitorApp:
         self.center_window(1400, 600)
 
         # Set dark background for the root window
-        self.root.configure(bg='#191F1F')
+        self.root.configure(bg='#2E2E2E')
 
-        self.frame = tk.Frame(root, bg='#191F1F')
+        self.frame = tk.Frame(root, bg='#2E2E2E')
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file, bg='#999999', fg='#191F1F')
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file, bg='#999999', fg='#000000')
         self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 0), sticky=tk.N)
 
-        self.top_frame = tk.Frame(self.frame, bg='#191F1F')
+        self.top_frame = tk.Frame(self.frame, bg='#2E2E2E')
         self.top_frame.grid(row=1, column=0, sticky=tk.NSEW)
 
         self.summary_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
-        self.summary_frame.grid(row=0, column=0, padx=5, pady=10, sticky=tk.NSEW)
+        self.summary_frame.grid(row=0, column=0, padx=5, pady=(10, 5), sticky=tk.NSEW)
 
-        self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=10, bg='#333333', fg='white')
+        self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
         self.summary_text.grid(row=0, column=0, sticky=tk.NSEW)
 
         self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview, bg='#333333')
         self.summary_scrollbar.grid(row=0, column=1, sticky=tk.NS)
-        self.summary_text.configure(yscrollcommand=self.summary_scrollbar.set)
+        self.summary_text.configure(yscrollcommand=self.summary_scrollbar.set, padx=10, pady=5)
 
         self.stats_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
-        self.stats_frame.grid(row=0, column=1, padx=5, pady=10, sticky=tk.NSEW)
+        self.stats_frame.grid(row=0, column=1, padx=5, pady=(10, 5), sticky=tk.NSEW)
 
-        self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=10, bg='#333333', fg='white')
+        self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
         self.stats_text.grid(row=0, column=0, sticky=tk.NSEW)
 
         self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview, bg='#333333')
         self.stats_scrollbar.grid(row=0, column=1, sticky=tk.NS)
-        self.stats_text.configure(yscrollcommand=self.stats_scrollbar.set)
+        self.stats_text.configure(yscrollcommand=self.stats_scrollbar.set, padx=10, pady=5)
 
-        self.bottom_frame = tk.Frame(root, bg='#191F1F')
+        self.bottom_frame = tk.Frame(root, bg='#2E2E2E')
         self.bottom_frame.grid(row=2, column=0, columnspan=2, sticky=tk.NSEW)
 
         self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
-        self.plot_frame1.grid(row=0, column=0, padx=5, pady=10, sticky=tk.NSEW)
+        self.plot_frame1.grid(row=0, column=0, padx=5, pady=(5, 10), sticky=tk.NSEW)
+
+        self.plot_frame1_scrollbar = Scrollbar(self.plot_frame1, orient=tk.VERTICAL, bg='#333333')
+        self.plot_frame1_scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
         self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
-        self.plot_frame2.grid(row=0, column=1, padx=5, pady=10, sticky=tk.NSEW)
+        self.plot_frame2.grid(row=0, column=1, padx=5, pady=(5, 10), sticky=tk.NSEW)
+
+        self.plot_frame2_scrollbar = Scrollbar(self.plot_frame2, orient=tk.VERTICAL, bg='#333333')
+        self.plot_frame2_scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close_app)
 

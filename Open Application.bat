@@ -5,7 +5,5 @@ cd /d %~dp0
 title Starting Chia Monitor
 
 :: Lancer Python dans une nouvelle fenêtre
-start "Starting Chia Monitor" python chia_log_monitor.py
-
-:: Fermer la fenêtre de commande actuelle
-taskkill /f /im cmd.exe
+:: start "Starting Chia Monitor" python chia_log_monitor.py
+start "Starting Chia Monitor" /min python Run.py
