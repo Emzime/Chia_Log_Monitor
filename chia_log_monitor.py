@@ -152,13 +152,12 @@ def calculate_summary_stats():
         f"Points de la ferme: {current_points}\n"
         f"Temps moyen entre changements de points: {points_interval_formatted}\n"
         
-        "\n[ Infos sur les partiels ]\n"
-        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
-        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n\n"
-        
-        f"Durée minimale: {min_time_taken:.2f} secondes\n"
+        "\n[ Infos sur les preuves ]\n"       
+        f"Temps minimale: {min_time_taken:.2f} secondes\n"
         f"Temps moyen: {avg_time_taken:.2f} secondes\n"
         f"Temps maximum: {max_time_taken:.2f} secondes\n"
+        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
+        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n" 
         
         "\n[ Autres données ]\n"
         f"Total des entrées: {total_entries}\n"
