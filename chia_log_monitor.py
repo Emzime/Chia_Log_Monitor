@@ -15,6 +15,7 @@ default_log_file = r'\\VM-CHIA\ChiaLog\debug.log'
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
 pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
 farmer_info_pattern = re.compile(r"GET /farmer response: ({.*})")
+giga_horse_fee_pattern = re.compile(r"Found proof: .* used_gpu = (?P<used_gpu>True|False), fee_rate = (?P<fee_rate>\d+\.\d+) %")
 
 log_data = defaultdict(list)
 pool_info = {}
@@ -37,7 +38,7 @@ def parse_log_line(line):
 def parse_pool_info(line):
     match = pool_info_pattern.search(line)
     if match:
-        info = eval(match.group(1))  # Using eval for simplicity, but json.loads is safer for actual use
+        info = eval(match.group(1))
         pool_info['name'] = info.get('name')
         pool_info['discord'] = info.get('description').split(' ')[-1].strip('()')
         pool_info['fee'] = info.get('fee')
@@ -53,6 +54,15 @@ def parse_farmer_info(line):
         farmer_info['current_points'] = info.get('current_points')
         return True
     return False
+
+
+def parse_giga_horse_info(log_lines):
+    for line in log_lines:
+        match = giga_horse_fee_pattern.search(line)
+        if match:
+            info = match.groupdict()
+            return info.get('used_gpu') == 'True', float(info.get('fee_rate'))
+    return False, None
 
 
 def read_log_file(file_path):
@@ -106,6 +116,45 @@ def calculate_summary_stats():
     total_count_le_8 = len(time_taken_le_8)
     total_count_gt_8 = len(time_taken_gt_8)
 
+    # Initialiser le temps moyen entre preuves supérieures et inférieures à 8 secondes
+    avg_time_between_proofs_le_8 = 0.0
+    avg_time_between_proofs_gt_8 = 0.0
+
+    # Calculer le temps moyen entre chaque preuve inférieure à 8 secondes s'il y en a au moins 2
+    if len(time_taken_le_8) >= 2:
+        time_between_proofs_le_8 = []
+        for i in range(1, len(time_taken_le_8)):
+            time_diff = time_taken_le_8[i] - time_taken_le_8[i - 1]
+            if time_diff > 0:
+                time_between_proofs_le_8.append(time_diff)
+
+        if time_between_proofs_le_8:
+            avg_time_between_proofs_le_8 = sum(time_between_proofs_le_8) / len(time_between_proofs_le_8)
+
+    # Calculer le temps moyen entre chaque preuve supérieure à 8 secondes s'il y en a au moins 2
+    if len(time_taken_gt_8) >= 2:
+        time_between_proofs_gt_8 = []
+        for i in range(1, len(time_taken_gt_8)):
+            time_diff = time_taken_gt_8[i] - time_taken_gt_8[i - 1]
+            if time_diff > 0:
+                time_between_proofs_gt_8.append(time_diff)
+
+        if time_between_proofs_gt_8:
+            avg_time_between_proofs_gt_8 = sum(time_between_proofs_gt_8) / len(time_between_proofs_gt_8)
+
+    # Formater le temps moyen avec deux chiffres après la virgule
+    avg_time_between_proofs_formatted_le_8 = f"{avg_time_between_proofs_le_8:.2f}" if avg_time_between_proofs_le_8 > 0 else ""
+    avg_time_between_proofs_formatted_gt_8 = f"{avg_time_between_proofs_gt_8:.2f}" if avg_time_between_proofs_gt_8 > 0 else ""
+
+    avg_time_sec_le_8 = "sec" if avg_time_between_proofs_le_8 > 0 else ""
+    avg_time_sec_gt_8 = "sec" if avg_time_between_proofs_gt_8 > 0 else ""
+
+    # Construire la chaîne de caractères pour les preuves inférieures à 8 secondes
+    proof_info_le_8 = f"Quantité de preuves inférieures à 8 secondes: {total_count_le_8} (temps moyen entre chaque: {avg_time_between_proofs_formatted_le_8} {avg_time_sec_le_8})\n" if avg_time_between_proofs_le_8 > 0 else f"Quantité de preuves inférieures à 8 secondes: {total_count_le_8}\n"
+
+    # Construire la chaîne de caractères pour les preuves supérieures à 8 secondes
+    proof_info_gt_8 = f"Quantité de preuves supérieures à 8 secondes: {total_count_gt_8} (temps moyen entre chaque: {avg_time_between_proofs_formatted_gt_8} {avg_time_sec_gt_8})\n" if avg_time_between_proofs_gt_8 > 0 else f"Quantité de preuves supérieures à 8 secondes: {total_count_gt_8}\n"
+
     # Calculer le temps écoulé entre la première et la dernière ligne du log
     first_timestamp = log_data['timestamp'][0]
     last_timestamp = log_data['timestamp'][-1]
@@ -120,6 +169,15 @@ def calculate_summary_stats():
     pool_fee = pool_info.get('fee', 'N/A')
     current_difficulty = farmer_info.get('current_difficulty', 'N/A')
     current_points = farmer_info.get('current_points', 'N/A')
+
+    # Extraire les informations de gigaHorse
+    gpu_used, fee_rate = parse_giga_horse_info(log_data['giga_horse_info'])
+
+    if not gpu_used:
+        gpu_used = "En attente de données"
+
+    if not fee_rate:
+        fee_rate = "En attente de données"
 
     # Calculer le temps entre les changements de points
     points_timestamps = []
@@ -138,28 +196,35 @@ def calculate_summary_stats():
         avg_points_interval = sum(points_intervals) / len(points_intervals)
         points_interval_formatted = format_elapsed_time(datetime.timedelta(seconds=avg_points_interval))
     else:
-        points_interval_formatted = 'En attente'
+        points_interval_formatted = 'En attente de données'
 
+    # Obtenir l'heure actuelle pour l'afficher dans le résumé
+    last_update_time = datetime.datetime.now().strftime('%H:%M:%S')
+
+    # Construction du résumé
     summary_stats = (
+        f"Dernière mise à jour: {last_update_time}\n\n"
         "[ Infos sur la pool ]\n"
         f"Nom: {pool_name}\n"
         f"Discord: {pool_discord}\n"
         f"Fee: {pool_fee} xch\n"
-        
+
         "\n[ Infos sur la ferme ]\n"
+        f"Utilisation du GPU: {gpu_used}\n"
         f"Total de parcelles: {total_plots}\n"
         f"Difficulté de la ferme: {current_difficulty}\n"
         f"Points de la ferme: {current_points}\n"
         f"Temps moyen entre changements de points: {points_interval_formatted}\n"
-        
-        "\n[ Infos sur les preuves ]\n"       
-        f"Temps minimale: {min_time_taken:.2f} secondes\n"
+
+        "\n[ Infos sur les preuves ]\n"
+        f"Temps minimal: {min_time_taken:.2f} secondes\n"
         f"Temps moyen: {avg_time_taken:.2f} secondes\n"
-        f"Temps maximum: {max_time_taken:.2f} secondes\n"
-        f"Quantité de preuves inférieur à 8 secondes: {total_count_le_8}\n"
-        f"Quantité de preuves supérieur à 8 secondes: {total_count_gt_8}\n" 
-        
+        f"Temps maximal: {max_time_taken:.2f} secondes\n"
+        f"{proof_info_le_8}"
+        f"{proof_info_gt_8}"
+
         "\n[ Autres données ]\n"
+        f"gigaHorse Fee: {fee_rate}\n"
         f"Total des entrées: {total_entries}\n"
         f"Total des preuves trouvées: {total_proofs_found}\n"
         f"Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
@@ -327,7 +392,7 @@ class LogMonitorApp:
                 print(f"Selected log file not found.")
 
         self.update_ui()
-        self.root.after(2000, self.update_periodically)
+        self.root.after(1000, self.update_periodically)
 
     def update_ui(self):
         summary = print_summary()
