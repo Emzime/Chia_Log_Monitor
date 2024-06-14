@@ -85,42 +85,45 @@ class LogMonitorApp:
         self.root.title("Chia Log Monitor")
         self.center_window(1400, 600)
 
-        self.frame = tk.Frame(root)
+        # Set dark background for the root window
+        self.root.configure(bg='#191F1F')
+
+        self.frame = tk.Frame(root, bg='#191F1F')
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file)
-        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=10, sticky=tk.N)
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file, bg='#999999', fg='#191F1F')
+        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky=tk.N)
 
-        self.top_frame = tk.Frame(self.frame)
+        self.top_frame = tk.Frame(self.frame, bg='#191F1F')
         self.top_frame.grid(row=1, column=0, sticky=tk.NSEW)
 
-        self.summary_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN)
+        self.summary_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.summary_frame.grid(row=0, column=0, padx=5, pady=10, sticky=tk.NSEW)
 
-        self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=10)
+        self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=10, bg='#333333', fg='white')
         self.summary_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview)
+        self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview, bg='#333333')
         self.summary_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.summary_text.configure(yscrollcommand=self.summary_scrollbar.set)
 
-        self.stats_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN)
+        self.stats_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.stats_frame.grid(row=0, column=1, padx=5, pady=10, sticky=tk.NSEW)
 
-        self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=10)
+        self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=10, bg='#333333', fg='white')
         self.stats_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview)
+        self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview, bg='#333333')
         self.stats_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.stats_text.configure(yscrollcommand=self.stats_scrollbar.set)
 
-        self.bottom_frame = tk.Frame(root)
+        self.bottom_frame = tk.Frame(root, bg='#191F1F')
         self.bottom_frame.grid(row=2, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN)
+        self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.plot_frame1.grid(row=0, column=0, padx=5, pady=10, sticky=tk.NSEW)
 
-        self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN)
+        self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.plot_frame2.grid(row=0, column=1, padx=5, pady=10, sticky=tk.NSEW)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close_app)
@@ -231,31 +234,67 @@ class LogMonitorApp:
         filtered_time_taken = []
         filtered_proofs_found = []
 
+        filtered_timestamps_above_8 = []
+        filtered_time_taken_above_8 = []
+        filtered_proofs_found_above_8 = []
+
         for timestamp, time_taken, proofs_found in zip(log_data['timestamp'], log_data['time_taken'], log_data['proofs_found']):
             if timestamp >= start_time:
-                filtered_timestamps.append(timestamp)
-                filtered_time_taken.append(time_taken)
-                filtered_proofs_found.append(proofs_found)
+                if time_taken > 8:
+                    filtered_timestamps_above_8.append(timestamp)
+                    filtered_time_taken_above_8.append(time_taken)
+                    filtered_proofs_found_above_8.append(proofs_found)
+                else:
+                    filtered_timestamps.append(timestamp)
+                    filtered_time_taken.append(time_taken)
+                    filtered_proofs_found.append(proofs_found)
 
         # Efface les tracés précédents
         self.ax1.clear()
         self.ax2.clear()
 
         # Met à jour les données dans les tracés existants
-        self.ax1.plot(filtered_timestamps, filtered_time_taken)
-        self.ax1.set_title('Temps en secondes sur la dernière heure')
+        self.ax1.plot(filtered_timestamps, filtered_time_taken, color='#17D283', label='<= 8 secondes')
+        self.ax1.plot(filtered_timestamps_above_8, filtered_time_taken_above_8, color='#FF4500', label='> 8 secondes')
+        self.ax1.axhline(y=8, color='white', linestyle='--', linewidth=1)
+        self.ax1.set_title('Temps en secondes sur la dernière heure', color='white')
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
         self.ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
+        self.ax1.legend(loc='upper right')
         self.fig1.autofmt_xdate()
 
-        self.ax2.plot(filtered_timestamps, filtered_proofs_found)
-        self.ax2.set_title('Preuves trouvées sur la dernière heure')
+        self.ax2.plot(filtered_timestamps, filtered_proofs_found, color='#17D283', label='<= 8 secondes')
+        self.ax2.plot(filtered_timestamps_above_8, filtered_proofs_found_above_8, color='#FF4500', label='> 8 secondes')
+        self.ax2.set_title('Preuves trouvées sur la dernière heure', color='white')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        # Set X axis tick interval
         self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
-        # Set Y axis tick interval
         self.ax2.yaxis.set_major_locator(plt.MultipleLocator(1))
+        self.ax2.legend(loc='upper right')
         self.fig2.autofmt_xdate()
+
+        # Définir les couleurs pour un thème foncé
+        self.fig1.patch.set_facecolor('#333333')
+        self.fig2.patch.set_facecolor('#333333')
+        self.ax1.set_facecolor('#333333')
+        self.ax2.set_facecolor('#333333')
+        self.ax1.tick_params(axis='x', colors='white')
+        self.ax1.tick_params(axis='y', colors='white')
+        self.ax2.tick_params(axis='x', colors='white')
+        self.ax2.tick_params(axis='y', colors='white')
+        self.ax1.spines['bottom'].set_color('white')
+        self.ax1.spines['top'].set_color('white')
+        self.ax1.spines['left'].set_color('white')
+        self.ax1.spines['right'].set_color('white')
+        self.ax2.spines['bottom'].set_color('white')
+        self.ax2.spines['top'].set_color('white')
+        self.ax2.spines['left'].set_color('white')
+        self.ax2.spines['right'].set_color('white')
+        self.ax1.title.set_color('white')
+        self.ax2.title.set_color('white')
+        self.ax1.xaxis.label.set_color('white')
+        self.ax1.yaxis.label.set_color('white')
+        self.ax2.xaxis.label.set_color('white')
+        self.ax2.yaxis.label.set_color('white')
 
         # Redessine le canevas
         self.canvas1.draw()
