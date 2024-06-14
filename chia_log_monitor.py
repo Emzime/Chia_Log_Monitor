@@ -216,7 +216,7 @@ class LogMonitorApp:
         self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
         self.summary_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview, bg='#333333')
+        self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview, activebackground='#666666')
         self.summary_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.summary_text.configure(yscrollcommand=self.summary_scrollbar.set, padx=10, pady=5)
 
@@ -226,7 +226,7 @@ class LogMonitorApp:
         self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
         self.stats_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview, bg='#333333')
+        self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview, activebackground='#666666')
         self.stats_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.stats_text.configure(yscrollcommand=self.stats_scrollbar.set, padx=10, pady=5)
 
@@ -236,13 +236,13 @@ class LogMonitorApp:
         self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.plot_frame1.grid(row=0, column=0, padx=5, pady=(5, 10), sticky=tk.NSEW)
 
-        self.plot_frame1_scrollbar = Scrollbar(self.plot_frame1, orient=tk.VERTICAL, bg='#333333')
+        self.plot_frame1_scrollbar = Scrollbar(self.plot_frame1, orient=tk.VERTICAL, activebackground='#666666')
         self.plot_frame1_scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
         self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
         self.plot_frame2.grid(row=0, column=1, padx=5, pady=(5, 10), sticky=tk.NSEW)
 
-        self.plot_frame2_scrollbar = Scrollbar(self.plot_frame2, orient=tk.VERTICAL, bg='#333333')
+        self.plot_frame2_scrollbar = Scrollbar(self.plot_frame2, orient=tk.VERTICAL, activebackground='#666666')
         self.plot_frame2_scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close_app)
