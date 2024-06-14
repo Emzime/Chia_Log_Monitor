@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 # Définir les bibliothèques nécessaires
-required_libraries = ['matplotlib']
+required_libraries = ['tk', 'matplotlib', 'mplcursors']
 
 
 # Vérifier l'installation de chaque bibliothèque
@@ -18,7 +18,11 @@ def check_installation(library):
 
 # Installer une bibliothèque avec pip
 def install_library(library):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", library])
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", library])
+    except subprocess.CalledProcessError as e:
+        print(f"Erreur lors de l'installation de {library}: {e}")
+        sys.exit(1)
 
 
 # Vérifier et installer les bibliothèques nécessaires
@@ -26,11 +30,7 @@ def check_and_install_libraries():
     for lib in required_libraries:
         if not check_installation(lib):
             print(f"Installation de {lib}...")
-            try:
-                install_library(lib)
-            except subprocess.CalledProcessError as e:
-                print(f"Erreur lors de l'installation de {lib}: {e}")
-                sys.exit(1)
+            install_library(lib)
 
 
 # Fonction principale pour démarrer le script principal
