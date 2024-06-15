@@ -23,6 +23,28 @@ pool_info = {}
 farmer_info = {}
 
 
+def read_log_file(file_path):
+    log_data.clear()
+    with open(file_path, 'r') as file:
+        for line in file:
+            parsed_line = parse_log_line(line)
+            if parsed_line:
+                timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
+                log_data['timestamp'].append(timestamp)
+                log_data['eligible_plots'].append(eligible_plots)
+                log_data['proofs_found'].append(proofs_found)
+                log_data['time_taken'].append(time_taken)
+                log_data['total_plots'].append(total_plots)
+            else:
+                parse_pool_info(line)
+                parse_farmer_info(line)
+                parse_points(line)
+                if "Found proof" in line:
+                    if 'giga_horse_info' not in log_data:
+                        log_data['giga_horse_info'] = []
+                    log_data['giga_horse_info'].append(line)
+
+
 def parse_log_line(line):
     match = log_pattern.match(line)
     if match:
@@ -76,28 +98,6 @@ def parse_points(line):
     return False
 
 
-def read_log_file(file_path):
-    log_data.clear()
-    with open(file_path, 'r') as file:
-        for line in file:
-            parsed_line = parse_log_line(line)
-            if parsed_line:
-                timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
-                log_data['timestamp'].append(timestamp)
-                log_data['eligible_plots'].append(eligible_plots)
-                log_data['proofs_found'].append(proofs_found)
-                log_data['time_taken'].append(time_taken)
-                log_data['total_plots'].append(total_plots)
-            else:
-                parse_pool_info(line)
-                parse_farmer_info(line)
-                parse_points(line)
-                if "Found proof" in line:
-                    if 'giga_horse_info' not in log_data:
-                        log_data['giga_horse_info'] = []
-                    log_data['giga_horse_info'].append(line)
-
-
 def print_summary():
     total_entries = len(log_data['timestamp'])
     if total_entries == 0:
@@ -113,72 +113,76 @@ def print_summary():
     return detailed_summary
 
 
-def calculate_summary_stats():
+def print_summary_stats():
     if not log_data['timestamp']:
         return "No log data found."
 
     total_entries = len(log_data['timestamp'])
-    min_time_taken = min(log_data['time_taken'])
-    max_time_taken = max(log_data['time_taken'])
-    avg_time_taken = calculate_avg_time_taken()
+    min_proof_time = min(log_data['time_taken'])
+    max_proof_time = max(log_data['time_taken'])
+    avg_proof_time = calculate_avg_proof_time()
     total_proofs_found = sum(log_data['proofs_found'])
     total_plots = log_data['total_plots'][-1] if log_data['total_plots'] else 0
 
+    # Mise à jour du nombre de preuves
     proof_info_le_8, proof_info_gt_8 = calculate_proof_info()
 
+    # Mise à jour du pourcentage de preuves
+    calculate_proof_info()
+
+    # Récupère depuis quand le log a été créé
     elapsed_time_formatted = calculate_elapsed_time()
 
+    # Récupère les informations du pool
     pool_name, pool_discord, pool_fee = extract_pool_info()
+
+    # Récupère les informations du farmer
     current_difficulty, current_points = extract_farmer_info()
 
+    # Récupère les informations de GigaHorse
     gpu_used, fee_rate = parse_giga_horse_info(log_data['giga_horse_info'])
     gpu_used = "Oui" if gpu_used else "Non"
     fee_rate = fee_rate if fee_rate else "Données en attentes"
 
+    # Affiche l'heure de la dernière mise à jour
     last_update_time = datetime.datetime.now().strftime('%H:%M:%S')
 
-    points_delta, time_since_last_points_change_formatted = calculate_points_info()
-
+    # Crée l'affichage des statistiques
     summary_stats = (
         f"Dernière mise à jour: {last_update_time}\n\n"
-        "::: Infos sur la pool :::\n"
-        f"  Nom: {pool_name}\n"
-        f"  Discord: {pool_discord}\n"
-        f"  Fee: {pool_fee}%\n"
+        ":: Infos sur la pool ::\n"
+        f" Nom: {pool_name}\n"
+        f" Discord: {pool_discord}\n"
+        f" Fee: {pool_fee}%\n"
 
-        "\n::: Infos sur la ferme :::\n"
-        f"  Utilisation du GPU: {gpu_used}\n"
-        f"  Total de parcelles: {total_plots}\n"
-        f"  Difficulté de la ferme: {current_difficulty}\n"
-        f"  Points de la ferme: {current_points}\n"
-        f"  Variation des points depuis le dernier changement: {points_delta}\n"
-        f"  Temps depuis le dernier changement de points: {time_since_last_points_change_formatted}\n"
+        "\n:: Infos sur la ferme ::\n"
+        f" Utilisation du GPU: {gpu_used}\n"
+        f" Total de parcelles: {total_plots}\n"
+        f" Difficulté de la ferme: {current_difficulty}\n"
+        f" Points de la ferme: {current_points}\n"
 
-        "\n::: Infos sur les preuves :::\n"
-        f"  Temps minimal: {min_time_taken:.2f} secondes\n"
-        f"  Temps moyen: {avg_time_taken:.2f} secondes\n"
-        f"  Temps maximal: {max_time_taken:.2f} secondes\n"
-        f"  {proof_info_le_8}"
-        f"  {proof_info_gt_8}"
+        "\n:: Infos sur les preuves ::\n"
+        f" {proof_info_le_8}"
+        f" {proof_info_gt_8}"
+        f" Temps minimal des preuves: {min_proof_time:.2f} secondes\n"
+        f" Temps moyen des preuves: {avg_proof_time:.2f} secondes\n"
+        f" Temps maximal des preuves: {max_proof_time:.2f} secondes\n"
 
-        "\n::: Autres données :::\n"
-        f"  GigaHorse Fee: {fee_rate}%\n"
-        f"  Total des entrées: {total_entries}\n"
-        f"  Total des preuves trouvées: {total_proofs_found}\n"
-        f"  Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
+        "\n:: Autres données ::\n"
+        f" GigaHorse Fee: {fee_rate}%\n"
+        f" Total des entrées: {total_entries}\n"
+        f" Total des preuves trouvées: {total_proofs_found}\n"
+        f" Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
     )
 
     return summary_stats
 
 
-def calculate_avg_time_taken():
-    # Nombre total d'entrées de log
+def calculate_avg_proof_time():
     total_entries = len(log_data['timestamp'])
     if total_entries == 0:
-        # Si aucune entrée, retourner 0.0 pour éviter la division par zéro
         return 0.0
     else:
-        # Moyenne du temps pris
         return sum(log_data['time_taken']) / total_entries
 
 
@@ -197,8 +201,8 @@ def calculate_proof_info():
         proof_percentage_gt_8 = 0.0
         proof_percentage_le_8 = 0.0
 
-    proof_info_le_8 = f"Quantité de preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}% des preuves)\n"
-    proof_info_gt_8 = f"Quantité de preuves supérieures à 8 secondes: {total_count_gt_8} ({proof_percentage_gt_8:.2f}% des preuves)\n"
+    proof_info_le_8 = f"Preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}%)\n"
+    proof_info_gt_8 = f"Preuves supérieures à 8 secondes: {total_count_gt_8} ({proof_percentage_gt_8:.2f}%)\n"
 
     return proof_info_le_8, proof_info_gt_8
 
@@ -221,34 +225,6 @@ def extract_farmer_info():
     current_difficulty = farmer_info.get('current_difficulty', 'N/A')
     current_points = farmer_info.get('current_points', 'N/A')
     return current_difficulty, current_points
-
-
-def calculate_points_info():
-    last_points_change = find_last_points_change()
-    if last_points_change:
-        current_points = last_points_change['current_points']
-        points_delta = current_points - last_points_change['current_points']
-        last_points_timestamp = last_points_change['timestamp']
-        last_points_timestamp_dt = datetime.datetime.fromisoformat(last_points_timestamp)
-        last_timestamp = log_data['timestamp'][-1]
-        time_since_last_points_change = last_timestamp - last_points_timestamp_dt
-        time_since_last_points_change_formatted = format_elapsed_time(time_since_last_points_change)
-    else:
-        points_delta = '0'
-        time_since_last_points_change_formatted = '0'
-
-    # Mise à jour du pourcentage
-    calculate_proof_info()
-    calculate_avg_time_taken()
-    return points_delta, time_since_last_points_change_formatted
-
-
-def find_last_points_change():
-    last_points_change = None
-    for line in log_data['lines']:
-        if 'current_points' in line:
-            last_points_change = line
-    return last_points_change
 
 
 # Fonction pour formater le temps écoulé en jours, heures, minutes et secondes
@@ -418,7 +394,7 @@ class LogMonitorApp:
         self.summary_text.insert(tk.END, summary)
         self.summary_text.see(tk.END)
 
-        stats = calculate_summary_stats()
+        stats = print_summary_stats()
         self.stats_text.delete(1.0, tk.END)
         self.stats_text.insert(tk.END, stats)
         self.stats_text.see(tk.END)
