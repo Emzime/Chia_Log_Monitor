@@ -117,6 +117,10 @@ def print_summary_stats():
     if not log_data['timestamp']:
         return "No log data found."
 
+    # Mise à jour du pourcentage de preuves
+    calculate_proof_times(log_data['time_taken'])
+    calculate_proof_info()
+
     total_entries = len(log_data['timestamp'])
     min_proof_time, max_proof_time, avg_proof_time = calculate_proof_times(log_data['time_taken'])
     total_proofs_found = sum(log_data['proofs_found'])
@@ -124,9 +128,6 @@ def print_summary_stats():
 
     # Mise à jour du nombre de preuves
     proof_info_le_8, proof_info_gt_8 = calculate_proof_info()
-
-    # Mise à jour du pourcentage de preuves
-    calculate_proof_info()
 
     # Récupère depuis quand le log a été créé
     elapsed_time_formatted = calculate_elapsed_time()
@@ -386,7 +387,7 @@ class LogMonitorApp:
                 print(f"Selected log file not found.")
 
         self.update_ui()
-        self.root.after(8000, self.update_periodically)
+        self.root.after(5000, self.update_periodically)
 
     def update_ui(self):
         summary = print_summary()
@@ -528,17 +529,19 @@ class LogMonitorApp:
         eligible_plots_gt_8_filtered = [plots for plots, proof in zip(eligible_plots_gt_8, proofs_found_gt_8) if proof > 0]
 
         # Déterminer le début et la fin de la période à afficher
-        end_time = datetime.datetime.now()  # Fin à l'instant actuel
-        start_time = end_time - datetime.timedelta(minutes=30)  # Début il y a 30 minutes
+        # Fin à l'instant actuel
+        end_time = datetime.datetime.now()
+        # Début il y a 30 minutes
+        start_time = end_time - datetime.timedelta(hours=24)
 
         # Tracer les données filtrées
         self.ax2.plot(timestamps_le_8_filtered, proofs_found_le_8_filtered, color='#17D283', marker='o', markersize=4, linestyle='-', label='<= 8 secondes')
         self.ax2.plot(timestamps_gt_8_filtered, proofs_found_gt_8_filtered, color='#FF4500', marker='o', markersize=4, linestyle='-', label='> 8 secondes')
 
         # Configurer le titre et les étiquettes de l'axe
-        self.ax2.set_title('Temps des preuves trouvées sur les 30 dernières minutes', color='white')
+        self.ax2.set_title('Temps des preuves trouvées sur les 24 dernières heures', color='white')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
+        self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=30))
         self.ax2.yaxis.set_major_locator(plt.MultipleLocator(1))
         self.ax2.legend(loc='upper right')
         self.fig2.autofmt_xdate()
