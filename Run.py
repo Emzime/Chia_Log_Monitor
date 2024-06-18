@@ -20,6 +20,7 @@ def check_installation(library):
 def install_library(library):
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", library])
+        print(f"{library} a été installé avec succès.")
     except subprocess.CalledProcessError as e:
         print(f"Erreur lors de l'installation de {library}: {e}")
         sys.exit(1)
