@@ -146,6 +146,30 @@ def print_summary_stats():
     # Affiche l'heure de la dernière mise à jour
     last_update_time = datetime.datetime.now().strftime('%H:%M:%S')
 
+    # Affiche l'heure de la dernière preuve <= 8 sec
+    last_proof_le_8_time = "Aucunes preuves inférieurs à 8 sec trouvée"
+    if total_proofs_found > 0:
+        last_proof_le_8_indices = [
+            i for i, (proof, time_taken) in enumerate(zip(log_data['proofs_found'], log_data['time_taken']))
+            if proof > 0 and time_taken <= 8
+        ]
+        if last_proof_le_8_indices:
+            last_proof_le_8_day = log_data['timestamp'][last_proof_le_8_indices[-1]].strftime('%d/%m/%Y')
+            last_proof_le_8_time = log_data['timestamp'][last_proof_le_8_indices[-1]].strftime('%H heures %M minutes %S secondes')
+            last_proof_le_8_time = f"Dernière preuve inférieur à 8 sec trouvée le {last_proof_le_8_day} à {last_proof_le_8_time}"
+
+    # Affiche l'heure de la dernière preuve > 8 sec
+    last_proof_gt_8_time = "Aucunes preuves supérieures à 8 sec trouvée"
+    if total_proofs_found > 0:
+        last_proof_gt_8_indices = [
+            i for i, (proof, time_taken) in enumerate(zip(log_data['proofs_found'], log_data['time_taken']))
+            if proof > 0 and time_taken > 8
+        ]
+        if last_proof_gt_8_indices:
+            last_proof_gt_8_day = log_data['timestamp'][last_proof_gt_8_indices[-1]].strftime('%d/%m/%Y')
+            last_proof_gt_8_time = log_data['timestamp'][last_proof_gt_8_indices[-1]].strftime('%H heures %M minutes %S secondes')
+            last_proof_gt_8_time = f"Dernière preuve supérieur à 8 sec trouvée le {last_proof_gt_8_day} à {last_proof_gt_8_time}"
+
     # Crée l'affichage des statistiques
     summary_stats = (
         f"Dernière mise à jour: {last_update_time}\n\n"
@@ -163,6 +187,8 @@ def print_summary_stats():
         "\n:: Infos sur les preuves ::\n"
         f" Total des entrées: {total_entries}\n"
         f" Total des preuves trouvées: {total_proofs_found}\n"
+        f" {last_proof_le_8_time}\n"
+        f" {last_proof_gt_8_time}\n\n"
         f" Temps minimal des preuves: {min_proof_time:.2f} secondes\n"
         f" Temps moyen des preuves: {avg_proof_time:.2f} secondes\n"
         f" Temps maximal des preuves: {max_proof_time:.2f} secondes\n\n"
@@ -201,8 +227,8 @@ def calculate_proof_info():
         proof_percentage_gt_8 = 0.0
         proof_percentage_le_8 = 0.0
 
-    proof_info_le_8 = f"Preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}%)\n"
-    proof_info_gt_8 = f"Preuves supérieures à 8 secondes: {total_count_gt_8} ({proof_percentage_gt_8:.2f}%)\n"
+    proof_info_le_8 = f"Total de preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}%)\n"
+    proof_info_gt_8 = f"Total de preuves supérieures à 8 secondes: {total_count_gt_8} ({proof_percentage_gt_8:.2f}%)\n"
 
     return proof_info_le_8, proof_info_gt_8
 
