@@ -447,7 +447,7 @@ class LogMonitorApp:
 
         # Calculer l'heure actuelle moins une heure
         now = datetime.datetime.now()
-        start_time = now - datetime.timedelta(minutes=30)
+        start_time = now - datetime.timedelta(minutes=60)
 
         # Filtrer les données pour ne garder que celles dans l'intervalle de la dernière heure
         filtered_data = {

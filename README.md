@@ -1,3 +1,7 @@
-![image](https://github.com/Emzime/Chia_Log_Monitor/assets/3422040/22210a4c-45ef-4775-bdb4-11668ca73a06)
 
+. ./venv/Scripts/activate
+py Standalone_Builder.py
+
+
+pyinstaller --noconfirm --onefile --windowed --icon "C:/PycharmProjects/Chia_Log_Monitor/images/icon.ico" --add-data "C:/PycharmProjects/Chia_Log_Monitor/images/icon.ico;images" --add-data "C:/PycharmProjects/Chia_Log_Monitor/images;images" "C:/PycharmProjects/Chia_Log_Monitor/chia_log_monitor.py"
 
