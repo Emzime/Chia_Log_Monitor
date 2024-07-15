@@ -1,8 +1,11 @@
 import datetime
+import os
 import re
+import platform
 import tkinter as tk
+from tqdm import tqdm
 from collections import defaultdict
-from tkinter import filedialog, Scrollbar, Text
+from tkinter import filedialog, Scrollbar, Text, messagebox, ttk
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -10,7 +13,18 @@ import mplcursors
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Chemin du log par défaut
-default_log_file = r'\\VM-CHIA\ChiaLog\debug.log'
+system = platform.system()
+if system == "Linux":
+    default_log_file = os.path.expanduser("~/.chia/mainnet/log/debug.log")
+elif system == "Windows":
+    default_log_file = os.path.expandvars(r"%systemdrive%\%homepath%\.chia\mainnet\log\debug.log")
+elif system == "Darwin":  # MacOS
+    default_log_file = os.path.expanduser("~/Library/Application Support/Chia/mainnet/log/debug.log")
+else:
+    # Si le système n'est pas reconnu, vous devez définir manuellement le chemin ici
+    default_log_file = ""
+
+personal_log = r'\\VM-CHIA\ChiaLog\debug.log'
 
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
 pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
@@ -23,26 +37,58 @@ pool_info = {}
 farmer_info = {}
 
 
-def read_log_file(file_path):
-    log_data.clear()
-    with open(file_path, 'r') as file:
-        for line in file:
-            parsed_line = parse_log_line(line)
-            if parsed_line:
-                timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
-                log_data['timestamp'].append(timestamp)
-                log_data['eligible_plots'].append(eligible_plots)
-                log_data['proofs_found'].append(proofs_found)
-                log_data['time_taken'].append(time_taken)
-                log_data['total_plots'].append(total_plots)
-            else:
-                parse_pool_info(line)
-                parse_farmer_info(line)
-                parse_points(line)
-                if "Found proof" in line:
-                    if 'giga_horse_info' not in log_data:
-                        log_data['giga_horse_info'] = []
-                    log_data['giga_horse_info'].append(line)
+def read_log_file(file_path, progress_bar, loading_label, percentage_label):
+    try:
+        # Afficher le message de chargement avant de commencer la lecture du fichier
+        loading_label.config(text="Chargement du fichier en cours...")
+        loading_label.grid(row=1, column=0, columnspan=2, sticky=tk.NSEW, padx=10, pady=10)
+
+        # Afficher la barre de progression au début de la lecture du fichier
+        progress_bar.grid(row=3, column=0, columnspan=2, sticky=tk.NSEW, padx=0, pady=(0, 0))
+
+        # Calculer la taille de la fenêtre pour placer le label de pourcentage au milieu
+        root_width = progress_bar.master.winfo_width()
+        progress_bar_width = progress_bar.winfo_width()
+        x_offset = (root_width - progress_bar_width) / 2
+
+        # Placement du label de pourcentage sous la barre de progression
+        percentage_label.place(relx=x_offset / root_width, rely=0.506, anchor=tk.CENTER)
+
+        with open(file_path, 'r') as file:
+            file_lines = file.readlines()
+            progress_bar['maximum'] = len(file_lines)
+
+            for line in tqdm(file_lines, desc='Processing Log File', unit=' lines', leave=False):
+                # Parsing log lines
+                parsed_line = parse_log_line(line)
+                if parsed_line:
+                    timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
+                    log_data['timestamp'].append(timestamp)
+                    log_data['eligible_plots'].append(eligible_plots)
+                    log_data['proofs_found'].append(proofs_found)
+                    log_data['time_taken'].append(time_taken)
+                    log_data['total_plots'].append(total_plots)
+                else:
+                    # Parsing other info
+                    if not parse_pool_info(line) and not parse_farmer_info(line) and not parse_points(line):
+                        parse_giga_horse_info(line)
+
+                progress_bar.step(1)
+                # Mettre à jour la barre de progression
+                progress_bar.update_idletasks()
+                # Mise à jour du pourcentage
+                percentage_label.config(text=f"{int((progress_bar['value'] / progress_bar['maximum']) * 100)}%")
+
+    except FileNotFoundError:
+        messagebox.showerror("Erreur de fichier", f"Le fichier de log '{file_path}' est introuvable.")
+    except Exception as e:
+        messagebox.showerror("Erreur de lecture", f"Une erreur est survenue lors de la lecture du fichier de log : {str(e)}")
+    finally:
+        # Cacher le message de chargement une fois la lecture terminée
+        loading_label.grid_remove()
+        # Assurez-vous que la barre de progression est cachée à la fin
+        progress_bar.grid_remove()
+        percentage_label.config(text="")
 
 
 def parse_log_line(line):
@@ -205,7 +251,8 @@ def print_summary_stats():
 
 def calculate_proof_times(time_taken_list):
     if not time_taken_list:
-        return 0.0, 0.0, 0.0
+        return None, None, None
+
     min_time = min(time_taken_list)
     max_time = max(time_taken_list)
     avg_time = sum(time_taken_list) / len(time_taken_list)
@@ -288,7 +335,7 @@ class LogMonitorApp:
         self.frame = tk.Frame(root, bg='#2E2E2E')
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=self.load_log_file, bg='#999999', fg='#000000')
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.load_log_file(self), bg='#999999', fg='#000000')
         self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 0), sticky=tk.N)
 
         self.top_frame = tk.Frame(self.frame, bg='#2E2E2E')
@@ -368,6 +415,23 @@ class LogMonitorApp:
         self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.plot_frame2)
         self.canvas2.get_tk_widget().grid(row=0, column=0, sticky=tk.NSEW)
 
+        # Création du label pour le message de chargement
+        self.loading_label = tk.Label(self.root, text="", bg='#2E2E2E', fg='white')
+
+        self.custom_style = ttk.Style()
+        self.custom_style.configure("Custom.Horizontal.TProgressbar",
+                                    troughcolor='#b3b3b3',  # Couleur de fond de la barre de progression
+                                    background='#336699',  # Couleur de la barre de progression
+                                    font=('Arial', 14, 'bold'),  # Police en gras et taille de 14 points
+                                    borderwidth=0)  # Largeur de la bordure
+
+        self.progress_bar = ttk.Progressbar(self.root, orient='horizontal', length=200, mode='determinate', style="Custom.Horizontal.TProgressbar")
+        # Cache la barre de progression au lancement de l'application
+        self.progress_bar.grid_remove()
+
+        # Création du label pour afficher le pourcentage de chargement
+        self.percentage_label = tk.Label(self.progress_bar, text="", bg="#E3E3E3", fg="black", font=('Arial', 12, 'bold'))
+
         self.maximize_window()
 
         # Initialize cursor attributes
@@ -386,30 +450,34 @@ class LogMonitorApp:
         self.root.geometry(f'{width}x{height}+{x}+{y}')
 
     @staticmethod
-    def load_log_file():
+    def load_log_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log"), ("All Files", "*.*")])
         if file_path:
-            read_log_file(file_path)
+            read_log_file(file_path, self.progress_bar, self.loading_label, self.percentage_label)
 
-    @staticmethod
-    def load_default_log_file():
-        if default_log_file:
-            try:
-                read_log_file(default_log_file)
-            except FileNotFoundError:
-                print(f"Default log file '{default_log_file}' not found.")
+    def load_default_log_file(self):
+        if os.path.exists(default_log_file):
+            read_log_file(default_log_file, self.progress_bar, self.loading_label, self.percentage_label)
+            self.summary_text.delete(1.0, tk.END)
+            self.summary_text.insert(tk.END, print_summary_stats())
+            self.plot_data()
+        elif os.path.exists(personal_log):
+            read_log_file(personal_log, self.progress_bar, self.loading_label, self.percentage_label)
+            self.summary_text.delete(1.0, tk.END)
+            self.summary_text.insert(tk.END, print_summary_stats())
+            self.plot_data()
+        else:
+            messagebox.showerror("Erreur de fichier", "Les fichiers de log sont introuvables.")
 
     def update_periodically(self):
-        if default_log_file:
+        # Vérifier si le fichier de log par défaut existe
+        if os.path.exists(default_log_file):
             try:
                 self.load_default_log_file()
             except FileNotFoundError:
                 print(f"Default log file '{default_log_file}' not found.")
         else:
-            try:
-                self.load_log_file()
-            except FileNotFoundError:
-                print(f"Selected log file not found.")
+            print(f"Default log file '{default_log_file}' not found.")
 
         self.update_ui()
         self.root.after(5000, self.update_periodically)
