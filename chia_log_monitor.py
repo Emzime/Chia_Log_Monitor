@@ -1,101 +1,73 @@
-import datetime
 import os
-import re
 import platform
+import re
+import threading
 import tkinter as tk
-from tqdm import tqdm
 from collections import defaultdict
-from tkinter import filedialog, Scrollbar, Text, messagebox, ttk
+from datetime import datetime, timedelta
+from tkinter import messagebox, ttk, filedialog
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import mplcursors
+from matplotlib import ticker
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Chemin du log par défaut
 system = platform.system()
-if system == "Linux":
+
+personal_log_file = r"\\VM-CHIA\ChiaLog\debug.log"
+
+# Définir le chemin par défaut en fonction du système d'exploitation
+if system == "linux" or system == "linux2":  # Linux
     default_log_file = os.path.expanduser("~/.chia/mainnet/log/debug.log")
-elif system == "Windows":
+elif system == "win32":  # Windows
     default_log_file = os.path.expandvars(r"%systemdrive%\%homepath%\.chia\mainnet\log\debug.log")
-elif system == "Darwin":  # MacOS
+elif system == "darwin":  # MacOS
     default_log_file = os.path.expanduser("~/Library/Application Support/Chia/mainnet/log/debug.log")
 else:
-    # Si le système n'est pas reconnu, vous devez définir manuellement le chemin ici
-    default_log_file = ""
-
-personal_log = r'\\VM-CHIA\ChiaLog\debug.log'
+    # Si le système n'est pas reconnu, définir un chemin alternatif
+    default_log_file = personal_log_file
 
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
 pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
 farmer_info_pattern = re.compile(r"GET /farmer response: ({.*})")
-giga_horse_fee_pattern = re.compile(r"Found proof: .* used_gpu = (?P<used_gpu>True|False), fee_rate = (?P<fee_rate>\d+\.\d+) %")
+giga_horse_fee_pattern = re.compile(r"fee_rate = (?P<fee_rate>\d+\.\d+) %")
 points_pattern = re.compile(r"Points: (\d+)")
 
 log_data = defaultdict(list)
 pool_info = {}
 farmer_info = {}
 
+# Définition des couleurs
+font_family = "Arial"
+color_yellow = "#FFFF80"
+color_red = "#FF4500"
+color_blue = "#5385F6"
+color_green = "#00FF00"
+color_black = "#000000"
+color_white = "#FFFFFF"
+color_dark_gray = "#333333"
+color_medium_grey = "#666666"
+color_light_gray = "#999999"
+color_very_light_gray = "#E6E6E6"
 
-def read_log_file(file_path, progress_bar, loading_label, percentage_label):
-    try:
-        # Afficher le message de chargement avant de commencer la lecture du fichier
-        loading_label.config(text="Chargement du fichier en cours...")
-        loading_label.grid(row=1, column=0, columnspan=2, sticky=tk.NSEW, padx=10, pady=10)
 
-        # Afficher la barre de progression au début de la lecture du fichier
-        progress_bar.grid(row=3, column=0, columnspan=2, sticky=tk.NSEW, padx=0, pady=(0, 0))
+def on_enter(event):
+    # Change the style to the hover style
+    event.widget.configure(style="Hover.Vertical.TScrollbar")
 
-        # Calculer la taille de la fenêtre pour placer le label de pourcentage au milieu
-        root_width = progress_bar.master.winfo_width()
-        progress_bar_width = progress_bar.winfo_width()
-        x_offset = (root_width - progress_bar_width) / 2
 
-        # Placement du label de pourcentage sous la barre de progression
-        percentage_label.place(relx=x_offset / root_width, rely=0.506, anchor=tk.CENTER)
-
-        with open(file_path, 'r') as file:
-            file_lines = file.readlines()
-            progress_bar['maximum'] = len(file_lines)
-
-            for line in tqdm(file_lines, desc='Processing Log File', unit=' lines', leave=False):
-                # Parsing log lines
-                parsed_line = parse_log_line(line)
-                if parsed_line:
-                    timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
-                    log_data['timestamp'].append(timestamp)
-                    log_data['eligible_plots'].append(eligible_plots)
-                    log_data['proofs_found'].append(proofs_found)
-                    log_data['time_taken'].append(time_taken)
-                    log_data['total_plots'].append(total_plots)
-                else:
-                    # Parsing other info
-                    if not parse_pool_info(line) and not parse_farmer_info(line) and not parse_points(line):
-                        parse_giga_horse_info(line)
-
-                progress_bar.step(1)
-                # Mettre à jour la barre de progression
-                progress_bar.update_idletasks()
-                # Mise à jour du pourcentage
-                percentage_label.config(text=f"{int((progress_bar['value'] / progress_bar['maximum']) * 100)}%")
-
-    except FileNotFoundError:
-        messagebox.showerror("Erreur de fichier", f"Le fichier de log '{file_path}' est introuvable.")
-    except Exception as e:
-        messagebox.showerror("Erreur de lecture", f"Une erreur est survenue lors de la lecture du fichier de log : {str(e)}")
-    finally:
-        # Cacher le message de chargement une fois la lecture terminée
-        loading_label.grid_remove()
-        # Assurez-vous que la barre de progression est cachée à la fin
-        progress_bar.grid_remove()
-        percentage_label.config(text="")
+def on_leave(event):
+    # Change the style back to the normal style
+    event.widget.configure(style="Normal.Vertical.TScrollbar")
 
 
 def parse_log_line(line):
     match = log_pattern.match(line)
     if match:
         timestamp_str = match.group(1)
-        timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
+        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%f')
         eligible_plots = int(match.group(2))
         proofs_found = int(match.group(3))
         time_taken = float(match.group(4))
@@ -131,8 +103,8 @@ def parse_giga_horse_info(log_lines):
             match = giga_horse_fee_pattern.search(line)
             if match:
                 info = match.groupdict()
-                return info.get('used_gpu') == 'True', float(info.get('fee_rate'))
-    return False, None
+                return float(info.get('fee_rate'))
+    return False
 
 
 def parse_points(line):
@@ -144,24 +116,38 @@ def parse_points(line):
     return False
 
 
-def print_summary():
+def print_summary(text_widget):
     total_entries = len(log_data['timestamp'])
     if total_entries == 0:
         return "No log data found."
 
-    detailed_summary = "Detailed log summary:\n"
+    special_color = color_green
+
+    detailed_summary = "Résumé détaillé du journal:\n\n"
     for i in range(total_entries):
-        detailed_summary += (f"{log_data['timestamp'][i]} - Eligible Plots: {log_data['eligible_plots'][i]}, "
-                             f"Proofs Found: {log_data['proofs_found'][i]}, "
-                             f"Time Taken: {log_data['time_taken'][i]:.2f} s, "
-                             f"Total Plots: {log_data['total_plots'][i]}\n")
+        detailed_summary += (f"{log_data['timestamp'][i]} - Parcelles admissibles: {log_data['eligible_plots'][i]}, "
+                             f"Preuves trouvées: {log_data['proofs_found'][i]}, "
+                             f"Temps pris: {log_data['time_taken'][i]:.2f} s, "
+                             f"Total des parcelles: {log_data['total_plots'][i]}\n")
 
-    return detailed_summary
+    # Insertion du texte avec balises
+    if text_widget:
+        text_widget.delete(1.0, tk.END)
+        text_widget.insert(tk.END, detailed_summary)
+
+        # Ajouter une balise pour le titre "Résumé détaillé du journal"
+        title_index = text_widget.search("Résumé détaillé du journal", "1.0", tk.END)
+        if title_index:
+            end_title_index = text_widget.index(f"{title_index} + {len('Résumé détaillé du journal')} chars")
+            text_widget.tag_add("title", title_index, end_title_index)
+            text_widget.tag_configure("title", foreground=special_color)
 
 
-def print_summary_stats():
+def print_summary_stats(text_widget):
     if not log_data['timestamp']:
-        return "No log data found."
+        text_widget.delete('1.0', tk.END)
+        text_widget.insert(tk.END, "Aucune donnée de journal trouvée.")
+        return
 
     # Mise à jour du pourcentage de preuves
     calculate_proof_times(log_data['time_taken'])
@@ -185,15 +171,17 @@ def print_summary_stats():
     current_difficulty, current_points = extract_farmer_info()
 
     # Récupère les informations de GigaHorse
-    gpu_used, fee_rate = parse_giga_horse_info(log_data['giga_horse_info'])
-    gpu_used = "Oui" if gpu_used else "Non"
-    fee_rate = fee_rate if fee_rate else "Données en attentes"
+    fee_rate = parse_giga_horse_info(log_data['giga_horse_info'])
+    if fee_rate is not False and fee_rate is not None:
+        fee_rate = f"{fee_rate}%"
+    else:
+        fee_rate = "Données en attente"
 
     # Affiche l'heure de la dernière mise à jour
-    last_update_time = datetime.datetime.now().strftime('%H:%M:%S')
+    last_update_time = datetime.now().strftime('%H:%M:%S')
 
     # Affiche l'heure de la dernière preuve <= 8 sec
-    last_proof_le_8_time = "Aucunes preuves inférieurs à 8 sec trouvée"
+    last_proof_le_8_time = "Aucune preuve inférieure à 8 sec trouvée"
     if total_proofs_found > 0:
         last_proof_le_8_indices = [
             i for i, (proof, time_taken) in enumerate(zip(log_data['proofs_found'], log_data['time_taken']))
@@ -202,10 +190,10 @@ def print_summary_stats():
         if last_proof_le_8_indices:
             last_proof_le_8_day = log_data['timestamp'][last_proof_le_8_indices[-1]].strftime('%d/%m/%Y')
             last_proof_le_8_time = log_data['timestamp'][last_proof_le_8_indices[-1]].strftime('%H heures %M minutes %S secondes')
-            last_proof_le_8_time = f"Dernière preuve inférieur à 8 sec trouvée le {last_proof_le_8_day} à {last_proof_le_8_time}"
+            last_proof_le_8_time = f"Dernière preuve inférieure à 8 sec trouvée le {last_proof_le_8_day} à {last_proof_le_8_time}"
 
     # Affiche l'heure de la dernière preuve > 8 sec
-    last_proof_gt_8_time = "Aucunes preuves supérieures à 8 sec trouvée"
+    last_proof_gt_8_time = "Aucune preuve supérieure à 8 sec trouvée"
     if total_proofs_found > 0:
         last_proof_gt_8_indices = [
             i for i, (proof, time_taken) in enumerate(zip(log_data['proofs_found'], log_data['time_taken']))
@@ -214,18 +202,16 @@ def print_summary_stats():
         if last_proof_gt_8_indices:
             last_proof_gt_8_day = log_data['timestamp'][last_proof_gt_8_indices[-1]].strftime('%d/%m/%Y')
             last_proof_gt_8_time = log_data['timestamp'][last_proof_gt_8_indices[-1]].strftime('%H heures %M minutes %S secondes')
-            last_proof_gt_8_time = f"Dernière preuve supérieur à 8 sec trouvée le {last_proof_gt_8_day} à {last_proof_gt_8_time}"
+            last_proof_gt_8_time = f"Dernière preuve supérieure à 8 sec trouvée le {last_proof_gt_8_day} à {last_proof_gt_8_time}"
 
     # Crée l'affichage des statistiques
     summary_stats = (
-        f"Dernière mise à jour: {last_update_time}\n\n"
         ":: Infos sur la pool ::\n"
         f" Nom: {pool_name}\n"
         f" Discord: {pool_discord}\n"
         f" Fee: {pool_fee}%\n"
 
         "\n:: Infos sur la ferme ::\n"
-        f" Utilisation du GPU: {gpu_used}\n"
         f" Total de parcelles: {total_plots}\n"
         f" Difficulté de la ferme: {current_difficulty}\n"
         f" Points de la ferme: {current_points}\n"
@@ -238,15 +224,37 @@ def print_summary_stats():
         f" Temps minimal des preuves: {min_proof_time:.2f} secondes\n"
         f" Temps moyen des preuves: {avg_proof_time:.2f} secondes\n"
         f" Temps maximal des preuves: {max_proof_time:.2f} secondes\n\n"
-        f" {proof_info_le_8}"
-        f" {proof_info_gt_8}"
+        f" {proof_info_le_8}\n"
+        f" {proof_info_gt_8}\n"
 
         "\n:: Autres données ::\n"
-        f" GigaHorse Fee: {fee_rate}%\n"
-        f" Temps écoulé depuis le début du log: {elapsed_time_formatted}\n"
+        f" GigaHorse Fee: {fee_rate}\n"
+        f" Temps écoulé depuis le début du log: {elapsed_time_formatted}\n\n"
+
+        f"Dernière mise à jour: {last_update_time}\n"
     )
 
-    return summary_stats
+    # Insertion du texte avec balises
+    text_widget.delete(1.0, tk.END)
+    text_widget.insert(tk.END, summary_stats)
+
+    # Configurer les balises pour la section
+    color_special = color_yellow
+    color_update_time = color_green
+
+    # Appliquer les balises pour les sections spéciales et l'heure de mise à jour
+    lines = summary_stats.split("\n")
+    for i, line in enumerate(lines):
+        if line.startswith("::") and line.endswith("::"):
+            start_index = f"{i + 1}.0"
+            end_index = f"{i + 1}.0 + {len(line)} chars"
+            text_widget.tag_add("special", start_index, end_index)
+            text_widget.tag_configure("special", foreground=color_special)
+        if line.startswith("Dernière mise à jour:"):
+            start_index = f"{i + 1}.0"
+            end_index = f"{i + 1}.0 + {len(line)} chars"
+            text_widget.tag_add("update_time", start_index, end_index)
+            text_widget.tag_configure("update_time", foreground=color_update_time)
 
 
 def calculate_proof_times(time_taken_list):
@@ -274,7 +282,7 @@ def calculate_proof_info():
         proof_percentage_gt_8 = 0.0
         proof_percentage_le_8 = 0.0
 
-    proof_info_le_8 = f"Total de preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}%)\n"
+    proof_info_le_8 = f"Total de preuves inférieures à 8 secondes: {total_count_le_8} ({proof_percentage_le_8:.2f}%)"
     proof_info_gt_8 = f"Total de preuves supérieures à 8 secondes: {total_count_gt_8} ({proof_percentage_gt_8:.2f}%)\n"
 
     return proof_info_le_8, proof_info_gt_8
@@ -288,15 +296,15 @@ def calculate_elapsed_time():
 
 
 def extract_pool_info():
-    pool_name = pool_info.get('name', 'N/A')
-    pool_discord = pool_info.get('discord', 'N/A')
-    pool_fee = pool_info.get('fee', 'N/A')
+    pool_name = pool_info.get('name', 'Données en attente')
+    pool_discord = pool_info.get('discord', 'Données en attente')
+    pool_fee = pool_info.get('fee', 'Données en attente')
     return pool_name, pool_discord, pool_fee
 
 
 def extract_farmer_info():
-    current_difficulty = farmer_info.get('current_difficulty', 'N/A')
-    current_points = farmer_info.get('current_points', 'N/A')
+    current_difficulty = farmer_info.get('current_difficulty', 'Données en attente')
+    current_points = farmer_info.get('current_points', 'Données en attente')
     return current_difficulty, current_points
 
 
@@ -325,56 +333,108 @@ def format_elapsed_time(elapsed_time):
 
 class LogMonitorApp:
     def __init__(self, root):
+        # Initialisation de l'application et des variables
         self.root = root
         self.root.title("Chia Log Monitor")
-        self.center_window(1400, 600)
-
         # Set dark background for the root window
-        self.root.configure(bg='#2E2E2E')
+        self.root.configure(bg=color_dark_gray)
+        self.root.iconbitmap('icon.ico')
+        self.center_window(1750, 768)
 
-        self.frame = tk.Frame(root, bg='#2E2E2E')
+        # Indicateur de chargement du log
+        self.log_loaded = False
+        # Initialize thread attribute
+        self.monitor_thread = None
+        # Verrou pour synchroniser l'accès à log_loaded
+        self.log_loaded_lock = threading.Lock()
+        self.last_file_size = 0
+        self.monitor_file_path = ""
+
+        # Initialize custom style for progress bar
+        self.custom_style = ttk.Style()
+        self.custom_style.theme_use('default')
+
+        # Normal style Progress_Bar
+        self.custom_style.configure(
+            "Normal.Vertical.TProgressbar",
+            troughcolor=color_dark_gray,  # La couleur du canal où se déplace la barre de défilement
+            background=color_green,  # La couleur de la barre de défilement
+            arrowcolor=color_black,  # La couleur des flèches de la scrollbar
+        )
+
+        # Normal style Scrollbar
+        self.custom_style.configure(
+            "Normal.Vertical.TScrollbar",
+            troughcolor=color_dark_gray,  # La couleur du canal où se déplace la barre de défilement
+            background=color_medium_grey,  # La couleur de la barre de défilement
+            arrowcolor=color_black,  # La couleur des flèches de la scrollbar
+        )
+
+        # Hover style Scrollbar
+        self.custom_style.configure(
+            "Hover.Vertical.TScrollbar",
+            troughcolor=color_dark_gray,  # La couleur du canal où se déplace la barre de défilement
+            background=color_medium_grey,  # La couleur de la barre de défilement
+            arrowcolor=color_green,  # La couleur des flèches de la scrollbar
+        )
+
+        self.progress_bar = ttk.Progressbar(self.root, style="Normal.Vertical.TProgressbar", orient="horizontal", length=400, mode="determinate")
+        self.progress_bar.grid(row=0, column=0, padx=5, pady=0, ipady=8, sticky=tk.NSEW)
+
+        self.percentage_label = tk.Label(self.progress_bar, text="")
+        self.loading_label = tk.Label(self.progress_bar, text="")
+
+        self.frame = tk.Frame(self.root, bg=color_dark_gray)
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.load_log_file(self), bg='#999999', fg='#000000')
-        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 0), sticky=tk.N)
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.load_log_file(), bg='#999999', fg='#000000')
+        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 5), sticky=tk.N)
 
-        self.top_frame = tk.Frame(self.frame, bg='#2E2E2E')
+        self.frame = tk.Frame(self.root, bg=color_dark_gray)
+        self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
+
+        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.choose_log_file(), bg='#999999', fg='#000000')
+        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 5), sticky=tk.N)
+
+        self.top_frame = tk.Frame(self.frame, bg=color_dark_gray)
         self.top_frame.grid(row=1, column=0, sticky=tk.NSEW)
 
-        self.summary_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
+        self.summary_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg=color_dark_gray)
         self.summary_frame.grid(row=0, column=0, padx=5, pady=(10, 5), sticky=tk.NSEW)
 
-        self.summary_text = Text(self.summary_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
+        self.summary_text = tk.Text(self.summary_frame, wrap=tk.WORD, height=30, bg=color_dark_gray, fg=color_white, font=(font_family, 11))
         self.summary_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.summary_scrollbar = Scrollbar(self.summary_frame, orient=tk.VERTICAL, command=self.summary_text.yview, activebackground='#666666')
+        self.summary_scrollbar = ttk.Scrollbar(self.summary_frame, orient=tk.VERTICAL, style="Normal.Vertical.TScrollbar", command=self.summary_text.yview)
         self.summary_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.summary_text.configure(yscrollcommand=self.summary_scrollbar.set, padx=10, pady=5)
 
-        self.stats_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
+        # Bind enter and leave events to the scrollbar
+        self.summary_scrollbar.bind("<Enter>", on_enter)
+        self.summary_scrollbar.bind("<Leave>", on_leave)
+
+        self.stats_frame = tk.Frame(self.top_frame, bd=2, relief=tk.SUNKEN, bg=color_dark_gray)
         self.stats_frame.grid(row=0, column=1, padx=5, pady=(10, 5), sticky=tk.NSEW)
 
-        self.stats_text = Text(self.stats_frame, wrap=tk.WORD, height=30, bg='#333333', fg='white')
+        self.stats_text = tk.Text(self.stats_frame, wrap=tk.WORD, height=30, bg=color_dark_gray, fg=color_white, font=(font_family, 11))
         self.stats_text.grid(row=0, column=0, sticky=tk.NSEW)
 
-        self.stats_scrollbar = Scrollbar(self.stats_frame, orient=tk.VERTICAL, command=self.stats_text.yview, activebackground='#666666')
+        self.stats_scrollbar = ttk.Scrollbar(self.stats_frame, orient=tk.VERTICAL, style="Normal.Vertical.TScrollbar", command=self.stats_text.yview)
         self.stats_scrollbar.grid(row=0, column=1, sticky=tk.NS)
         self.stats_text.configure(yscrollcommand=self.stats_scrollbar.set, padx=10, pady=5)
 
-        self.bottom_frame = tk.Frame(root, bg='#2E2E2E')
+        # Bind enter and leave events to the scrollbar
+        self.stats_scrollbar.bind("<Enter>", on_enter)
+        self.stats_scrollbar.bind("<Leave>", on_leave)
+
+        self.bottom_frame = tk.Frame(root, bg=color_dark_gray)
         self.bottom_frame.grid(row=2, column=0, columnspan=2, sticky=tk.NSEW)
 
-        self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
+        self.plot_frame1 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg=color_dark_gray)
         self.plot_frame1.grid(row=0, column=0, padx=5, pady=(5, 10), sticky=tk.NSEW)
 
-        self.plot_frame1_scrollbar = Scrollbar(self.plot_frame1, orient=tk.VERTICAL, activebackground='#666666')
-        self.plot_frame1_scrollbar.grid(row=0, column=1, sticky=tk.NS)
-
-        self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg='#333333')
+        self.plot_frame2 = tk.Frame(self.bottom_frame, bd=2, relief=tk.SUNKEN, bg=color_dark_gray)
         self.plot_frame2.grid(row=0, column=1, padx=5, pady=(5, 10), sticky=tk.NSEW)
-
-        self.plot_frame2_scrollbar = Scrollbar(self.plot_frame2, orient=tk.VERTICAL, activebackground='#666666')
-        self.plot_frame2_scrollbar.grid(row=0, column=1, sticky=tk.NS)
 
         self.root.protocol("WM_DELETE_WINDOW", self.close_app)
 
@@ -415,109 +475,203 @@ class LogMonitorApp:
         self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.plot_frame2)
         self.canvas2.get_tk_widget().grid(row=0, column=0, sticky=tk.NSEW)
 
-        # Création du label pour le message de chargement
-        self.loading_label = tk.Label(self.root, text="", bg='#2E2E2E', fg='white')
-
-        self.custom_style = ttk.Style()
-        self.custom_style.configure("Custom.Horizontal.TProgressbar",
-                                    troughcolor='#b3b3b3',  # Couleur de fond de la barre de progression
-                                    background='#336699',  # Couleur de la barre de progression
-                                    font=('Arial', 14, 'bold'),  # Police en gras et taille de 14 points
-                                    borderwidth=0)  # Largeur de la bordure
-
-        self.progress_bar = ttk.Progressbar(self.root, orient='horizontal', length=200, mode='determinate', style="Custom.Horizontal.TProgressbar")
-        # Cache la barre de progression au lancement de l'application
-        self.progress_bar.grid_remove()
-
-        # Création du label pour afficher le pourcentage de chargement
-        self.percentage_label = tk.Label(self.progress_bar, text="", bg="#E3E3E3", fg="black", font=('Arial', 12, 'bold'))
-
-        self.maximize_window()
-
         # Initialize cursor attributes
         self.cursor1 = None
         self.cursor2 = None
 
-        # Load default log file and start periodic update
-        self.load_default_log_file()
-        self.update_periodically()
+        # Configurer le style du graphique
+        self.fig1.patch.set_facecolor(color_dark_gray)
+        self.ax1.set_facecolor(color_dark_gray)
+        self.ax1.tick_params(axis='x', colors=color_white)
+        self.ax1.tick_params(axis='y', colors=color_white)
+        self.ax1.spines['bottom'].set_color(color_white)
+        self.ax1.spines['top'].set_color(color_dark_gray)
+        self.ax1.spines['left'].set_color(color_white)
+        self.ax1.spines['right'].set_color(color_dark_gray)
+        self.ax1.title.set_color(color_white)
+        self.ax1.xaxis.label.set_color(color_white)
+        self.ax1.yaxis.label.set_color(color_white)
 
-    def center_window(self, width, height):
-        screen_width = self.root.winfo_screenwidth()
-        screen_height = self.root.winfo_screenheight()
-        x = (screen_width - width) // 2
-        y = (screen_height - height) // 2
-        self.root.geometry(f'{width}x{height}+{x}+{y}')
+        # Configurer le style du graphique
+        self.fig2.patch.set_facecolor(color_dark_gray)
+        self.ax2.set_facecolor(color_dark_gray)
+        self.ax2.tick_params(axis='x', colors=color_white)
+        self.ax2.tick_params(axis='y', colors=color_white)
+        self.ax2.spines['bottom'].set_color(color_white)
+        self.ax2.spines['top'].set_color(color_dark_gray)
+        self.ax2.spines['left'].set_color(color_white)
+        self.ax2.spines['right'].set_color(color_dark_gray)
+        self.ax2.title.set_color(color_white)
+        self.ax2.xaxis.label.set_color(color_white)
+        self.ax2.yaxis.label.set_color(color_white)
 
-    @staticmethod
-    def load_log_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log"), ("All Files", "*.*")])
+        # Lecture automatique du fichier de log a l'ouverture si celui-ci existe
+        self.load_log_file()
+
+        if not self.log_loaded:
+            self.update_ui()
+
+        if self.log_loaded:
+            self.update_periodically()
+
+    def read_log_file(self, file_path):
+        try:
+            # Display the progress bar at the beginning of file reading
+            self.progress_bar.grid(row=1, column=0, columnspan=2, padx=(215, 5), ipady=8, sticky=tk.NSEW)
+
+            # Place the loading message in the middle of the progress bar
+            self.loading_label = tk.Label(self.root, text="Chargement en cours: ", background=color_dark_gray, foreground=color_green, font=(font_family, 11, 'bold'))
+            self.loading_label.grid(row=1, column=0, columnspan=2, padx=5, ipadx=5, ipady=7, sticky=tk.NW)
+
+            # Place the percentage label
+            self.percentage_label = tk.Label(self.root, text="", background=color_dark_gray, foreground=color_green, font=(font_family, 11))
+            self.percentage_label.grid(row=1, column=0, columnspan=2, padx=(173, 0), ipadx=5, ipady=7, sticky=tk.NW)
+
+            with open(file_path, 'r') as file:
+                file_lines = file.readlines()
+                self.progress_bar['maximum'] = len(file_lines)
+
+                for line in file_lines:
+                    # Parsing log lines
+                    parsed_line = parse_log_line(line)
+                    if parsed_line:
+                        timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
+                        log_data['timestamp'].append(timestamp)
+                        log_data['eligible_plots'].append(eligible_plots)
+                        log_data['proofs_found'].append(proofs_found)
+                        log_data['time_taken'].append(time_taken)
+                        log_data['total_plots'].append(total_plots)
+                    else:
+                        # Parsing other info
+                        if not parse_pool_info(line) and not parse_farmer_info(line) and not parse_points(line):
+                            parse_giga_horse_info(line)
+
+                    self.progress_bar.step(1)
+                    # Mettre à jour la barre de progression
+                    self.progress_bar.update_idletasks()
+                    # Mise à jour du pourcentage
+                    self.percentage_label.config(text=f"{int((self.progress_bar['value'] / self.progress_bar['maximum']) * 100)}%")
+
+            # Marquer le chargement comme terminé en toute sécurité avec le verrou
+            with self.log_loaded_lock:
+                self.log_loaded = True
+
+            # Appeler update_ui après la fin du chargement
+            self.root.after(0, self.update_ui)
+
+        except FileNotFoundError:
+            messagebox.showerror("Erreur de fichier", f"Le fichier de log '{file_path}' est introuvable.")
+        except Exception as e:
+            messagebox.showerror("Erreur de lecture", f"Une erreur est survenue lors de la lecture du fichier de log : {str(e)}")
+        finally:
+            # Cacher le message de chargement une fois la lecture terminée
+            self.loading_label.grid_remove()
+            # Assurez-vous que la barre de progression est cachée à la fin
+            self.progress_bar.grid_remove()
+            self.percentage_label.config(text="")
+            # Signalisation de la fin du chargement
+            self.log_loaded = True
+
+    def read_new_lines(self, file_path):
+        current_size = os.path.getsize(file_path)
+        if current_size > self.last_file_size:
+            with open(file_path, 'r') as file:
+                file.seek(self.last_file_size)
+                new_lines = file.readlines()
+                self.last_file_size = current_size
+
+                for line in new_lines:
+                    parsed_line = parse_log_line(line)
+                    if parsed_line:
+                        timestamp, eligible_plots, proofs_found, time_taken, total_plots = parsed_line
+                        log_data['timestamp'].append(timestamp)
+                        log_data['eligible_plots'].append(eligible_plots)
+                        log_data['proofs_found'].append(proofs_found)
+                        log_data['time_taken'].append(time_taken)
+                        log_data['total_plots'].append(total_plots)
+                    else:
+                        if not parse_pool_info(line) and not parse_farmer_info(line) and not parse_points(line):
+                            parse_giga_horse_info(line)
+
+                self.update_ui()
+                self.plot_data()
+
+    def choose_log_file(self):
+        # Sinon, permettre à l'utilisateur de sélectionner un fichier
+        file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log")])
         if file_path:
-            read_log_file(file_path, self.progress_bar, self.loading_label, self.percentage_label)
+            self.start_read_log_file(file_path)
 
-    def load_default_log_file(self):
-        if os.path.exists(default_log_file):
-            read_log_file(default_log_file, self.progress_bar, self.loading_label, self.percentage_label)
-            self.summary_text.delete(1.0, tk.END)
-            self.summary_text.insert(tk.END, print_summary_stats())
-            self.plot_data()
-        elif os.path.exists(personal_log):
-            read_log_file(personal_log, self.progress_bar, self.loading_label, self.percentage_label)
-            self.summary_text.delete(1.0, tk.END)
-            self.summary_text.insert(tk.END, print_summary_stats())
-            self.plot_data()
+    def load_log_file(self):
+        # Vérifier si une surveillance est déjà en cours
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            return
+
+        # Vérifier si le fichier par défaut existe
+        if os.path.isfile(default_log_file):
+            # Si le fichier par défaut existe, démarrer la lecture du fichier
+            self.start_read_log_file(default_log_file)
         else:
-            messagebox.showerror("Erreur de fichier", "Les fichiers de log sont introuvables.")
+            # Sinon, permettre à l'utilisateur de sélectionner un fichier
+            file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log")])
+            if file_path:
+                self.start_read_log_file(file_path)
+
+    def update_log_file(self):
+        self.read_new_lines(self.monitor_file_path)
+        self.root.after(1000, self.update_log_file)
+
+    def start_monitoring(self, file_path):
+        self.last_file_size = os.path.getsize(file_path)
+        self.monitor_file_path = file_path
+        self.root.after(1000, self.update_log_file)
+
+    def start_read_log_file(self, file_path):
+        # Start the log file reading in a separate thread
+        if self.monitor_thread is not None and self.monitor_thread.is_alive():
+            self.monitor_thread.join()
+
+        self.monitor_thread = threading.Thread(target=self.read_log_file, args=(file_path,))
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+
+        # Start monitoring file changes
+        self.start_monitoring(file_path)
 
     def update_periodically(self):
-        # Vérifier si le fichier de log par défaut existe
-        if os.path.exists(default_log_file):
-            try:
-                self.load_default_log_file()
-            except FileNotFoundError:
-                print(f"Default log file '{default_log_file}' not found.")
-        else:
-            print(f"Default log file '{default_log_file}' not found.")
-
         self.update_ui()
         self.root.after(5000, self.update_periodically)
 
     def update_ui(self):
-        summary = print_summary()
-        self.summary_text.delete(1.0, tk.END)
-        self.summary_text.insert(tk.END, summary)
-        self.summary_text.see(tk.END)
+        if hasattr(self, 'log_loaded') and self.log_loaded:
+            current_summary_yview = self.summary_text.yview()
+            current_stats_yview = self.stats_text.yview()
 
-        stats = print_summary_stats()
-        self.stats_text.delete(1.0, tk.END)
-        self.stats_text.insert(tk.END, stats)
-        self.stats_text.see(tk.END)
+            print_summary(self.summary_text)
+            print_summary_stats(self.stats_text)
 
-        if not log_data['timestamp']:
-            # Cacher le top_frame
-            self.top_frame.grid_forget()
-            # Cacher le bottom_frame
-            self.bottom_frame.grid_forget()
+            self.summary_text.yview_moveto(current_summary_yview[0])
+            self.stats_text.yview_moveto(current_stats_yview[0])
 
-            # Afficher un message à la place dans summary_text
-            self.summary_text.delete(1.0, tk.END)
-            self.summary_text.insert(tk.END, "Aucune donnée de log disponible.")
             self.summary_text.see(tk.END)
-        else:
-            self.top_frame.grid(row=1, column=0, sticky=tk.NSEW)  # Afficher le top_frame
-            self.bottom_frame.grid(row=2, column=0, columnspan=2, sticky=tk.NSEW)  # Afficher le bottom_frame
+            self.stats_text.see(tk.END)
 
-        self.plot_data()
+        else:
+            self.summary_text.delete(1.0, tk.END)
+            self.summary_text.insert(tk.END, "Chargement en cours...")
+            self.summary_text.see(tk.END)
+
+            self.stats_text.delete(1.0, tk.END)
+            self.stats_text.insert(tk.END, "Chargement en cours...")
+            self.stats_text.see(tk.END)
 
     def plot_data(self):
         if not log_data['timestamp']:
             return
 
-        # Calculer l'heure actuelle moins une heure
-        now = datetime.datetime.now()
-        start_time = now - datetime.timedelta(minutes=60)
+        now = datetime.now()
+        start_time = now - timedelta(minutes=60)
 
-        # Filtrer les données pour ne garder que celles dans l'intervalle de la dernière heure
         filtered_data = {
             '<= 8 sec': [],
             '> 8 sec': []
@@ -530,108 +684,114 @@ class LogMonitorApp:
                 else:
                     filtered_data['> 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
 
-        # Préparer les données pour le graphique 1 (<= 8 secondes)
         timestamps_le_8 = [data[0] for data in filtered_data['<= 8 sec']]
         time_taken_le_8 = [data[1] for data in filtered_data['<= 8 sec']]
         proofs_found_le_8 = [data[2] for data in filtered_data['<= 8 sec']]
         eligible_plots_le_8 = [data[3] for data in filtered_data['<= 8 sec']]
 
-        # Préparer les données pour le graphique 2 (> 8 secondes)
         timestamps_gt_8 = [data[0] for data in filtered_data['> 8 sec']]
         time_taken_gt_8 = [data[1] for data in filtered_data['> 8 sec']]
         proofs_found_gt_8 = [data[2] for data in filtered_data['> 8 sec']]
         eligible_plots_gt_8 = [data[3] for data in filtered_data['> 8 sec']]
 
-        # Filtrer les données avec preuves trouvées pour all_proof_graphs
         self.all_proof_graphs(timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8, timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8)
-
-        # Filtrer les données avec preuves trouvées > 0 pour found_proof_graph
-        timestamps_le_8_filtered, proofs_found_le_8_filtered, time_taken_le_8_filtered, eligible_plots_le_8_filtered = self.filter_data(timestamps_le_8, proofs_found_le_8, time_taken_le_8, eligible_plots_le_8)
-        timestamps_gt_8_filtered, proofs_found_gt_8_filtered, time_taken_gt_8_filtered, eligible_plots_gt_8_filtered = self.filter_data(timestamps_gt_8, proofs_found_gt_8, time_taken_gt_8, eligible_plots_gt_8)
-        self.found_proof_graphs(timestamps_le_8_filtered, time_taken_le_8_filtered, eligible_plots_le_8_filtered, proofs_found_le_8_filtered, timestamps_gt_8_filtered, time_taken_gt_8_filtered, eligible_plots_gt_8_filtered,
-                                proofs_found_gt_8_filtered)
-
-    @staticmethod
-    def filter_data(timestamps, proofs_found, time_taken, eligible_plots):
-        timestamps_filtered = [ts for ts, proof in zip(timestamps, proofs_found) if proof > 0]
-        proofs_found_filtered = [proof for proof in proofs_found if proof > 0]
-        time_taken_filtered = [time for time, proof in zip(time_taken, proofs_found) if proof > 0]
-        eligible_plots_filtered = [plots for plots, proof in zip(eligible_plots, proofs_found) if proof > 0]
-
-        return timestamps_filtered, proofs_found_filtered, time_taken_filtered, eligible_plots_filtered
+        self.found_proof_graphs(timestamps_le_8, time_taken_le_8, eligible_plots_le_8, proofs_found_le_8, timestamps_gt_8, time_taken_gt_8, eligible_plots_gt_8, proofs_found_gt_8)
 
     def all_proof_graphs(self, timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8, timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8):
         # Efface les tracés précédents
         self.ax1.cla()
 
-        # Plot pour <= 8 secondes avec des marqueurs 'o'
-        self.ax1.plot(timestamps_le_8, time_taken_le_8, color='#17D283', marker='o', markersize=5, linestyle='-', label='<= 8 secondes')
+        # Déterminer le début et la fin de la période à afficher
+        end_time = datetime.now()
+        start_time = end_time - timedelta(minutes=60)
 
-        # Plot pour > 8 secondes avec des marqueurs 'o'
-        self.ax1.plot(timestamps_gt_8, time_taken_gt_8, color='#FF4500', marker='o', markersize=5, linestyle='None', label='> 8 secondes')
+        # Filtrage des données
+        timestamps_le_8_filtered = [ts for ts in timestamps_le_8 if ts >= start_time]
+        time_taken_le_8_filtered = [time_taken_le_8[i] for i, ts in enumerate(timestamps_le_8) if ts >= start_time]
+        proofs_found_le_8_filtered = [proofs_found_le_8[i] for i, ts in enumerate(timestamps_le_8) if ts >= start_time]
 
-        # Colorer les points où proofs_found_le_8 > 0
-        for x, y, proof in zip(timestamps_le_8, time_taken_le_8, proofs_found_le_8):
+        timestamps_gt_8_filtered = [ts for ts in timestamps_gt_8 if ts >= start_time]
+        time_taken_gt_8_filtered = [time_taken_gt_8[i] for i, ts in enumerate(timestamps_gt_8) if ts >= start_time]
+        proofs_found_gt_8_filtered = [proofs_found_gt_8[i] for i, ts in enumerate(timestamps_gt_8) if ts >= start_time]
+
+        # Tracer les lignes pour <= 8 secondes
+        # line_le_8, = self.ax1.plot(timestamps_le_8_filtered, time_taken_le_8_filtered, color=color_green, linestyle='-', label='<= 8 secondes')
+
+        # Ajouter des marqueurs pour <= 8 secondes sans relier avec des lignes
+        scatter_le_8 = self.ax1.scatter(timestamps_le_8_filtered, time_taken_le_8_filtered, color=color_green, marker='o', s=25)
+
+        # Ajouter des marqueurs pour > 8 secondes sans relier avec des lignes
+        scatter_gt_8 = self.ax1.scatter(timestamps_gt_8_filtered, time_taken_gt_8_filtered, color=color_red, marker='o', s=25, label='> 8 secondes')
+
+        # Ajouter des points pour proofs_found_le_8 > 0 sans relier avec des lignes
+        for x, y, proof in zip(timestamps_le_8_filtered, time_taken_le_8_filtered, proofs_found_le_8_filtered):
             if proof > 0:
-                self.ax1.plot(x, y, color='#5385F6', marker='o', markersize=5, linestyle='None')
+                self.ax1.scatter(x, y, color=color_blue, marker='o', s=25)
 
-        # Colorer les points où proofs_found_gt_8 > 0
-        for x, y, proof in zip(timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8):
+        # Ajouter des points pour proofs_found_gt_8 > 0 sans relier avec des lignes
+        for x, y, proof in zip(timestamps_gt_8_filtered, time_taken_gt_8_filtered, proofs_found_gt_8_filtered):
             if proof > 0:
-                self.ax1.plot(x, y, color='#5385F6', marker='o', markersize=5, linestyle='None')
+                self.ax1.scatter(x, y, color=color_blue, marker='o', s=25)
 
-        # Configurer le reste du graphique
-        self.ax1.axhline(y=8, color='white', linestyle='--', linewidth=0.5)
-        self.ax1.set_title('Temps de toutes les preuves sur la dernière heure', color='white')
+        # Ajouter le quadrillage à l'arrière-plan
+        self.ax1.axhline(y=8, color=color_white, linestyle='--', linewidth=0.5)
+        self.ax1.set_title('Temps de toutes les preuves sur la dernière heure', color=color_white)
+
+        # Définition du formateur personnalisé pour l'axe x
         self.ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        self.ax1.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
+
+        # Définir la limite temporelle de la dernière heure
+        self.ax1.set_xlim(start_time, end_time)
+
+        # Calculer la limite maximale de l'axe Y
+        max_time_taken = max(max(time_taken_le_8_filtered, default=0), max(time_taken_gt_8_filtered, default=0))
+        y_upper_limit = max_time_taken + 2 if max_time_taken > 10 else 10
+        self.ax1.set_ylim(0, y_upper_limit)
+
+        # Utilisation de MaxNLocator pour limiter le nombre de ticks sur l'axe x
+        self.ax1.xaxis.set_major_locator(ticker.MaxNLocator(20))
         self.fig1.autofmt_xdate()
 
-        # Définir les couleurs pour un thème foncé
-        self.fig1.patch.set_facecolor('#333333')
-        self.ax1.set_facecolor('#333333')
-        self.ax1.tick_params(axis='x', colors='white')
-        self.ax1.tick_params(axis='y', colors='white')
-        self.ax1.spines['bottom'].set_color('white')
-        self.ax1.spines['top'].set_color('white')
-        self.ax1.spines['left'].set_color('white')
-        self.ax1.spines['right'].set_color('white')
-        self.ax1.title.set_color('white')
-        self.ax1.xaxis.label.set_color('white')
-        self.ax1.yaxis.label.set_color('white')
-
-        # Gérer les tooltips avec mplcursors sur self.ax1
+        # Gérer les tooltips avec mplcursors
         if self.cursor1:
             self.cursor1.visible = False
 
-        self.cursor1 = mplcursors.cursor(self.ax1, hover=True)
+        # Créez un curseur pour les objets scatter
+        self.cursor1 = mplcursors.cursor([scatter_le_8, scatter_gt_8], hover=True)
 
         @self.cursor1.connect("add")
-        def on_add_cursor1(sel, tooltip_color='white', face_color='black'):
-            idx = int(sel.index)
+        def on_add_cursor1(sel):
+            tooltip_color = color_white
+            face_color = color_black
+            artist = sel.artist
 
-            if idx < len(timestamps_gt_8):
-                timestamp_gt_8 = timestamps_gt_8[idx]
-                parcelles = eligible_plots_gt_8[idx]
-                temps = time_taken_gt_8[idx]
-                sel.annotation.set(text=f"{timestamp_gt_8.strftime('%d-%m-%Y %H:%M:%S')}\n"
-                                        f"Parcelles éligibles: {parcelles}\n"
-                                        f"Preuves trouvées: {proofs_found_gt_8[idx]}\n"
-                                        f"Temps: {temps:.2f} s",
-                                   color=tooltip_color,
-                                   bbox=dict(facecolor=face_color, edgecolor='none'),
-                                   ha='left')
-            elif idx - len(timestamps_gt_8) < len(timestamps_le_8):
-                timestamp_le_8 = timestamps_le_8[idx]
-                parcelles = eligible_plots_le_8[idx]
-                temps = time_taken_le_8[idx]
-                sel.annotation.set(text=f"{timestamp_le_8.strftime('%d-%m-%Y %H:%M:%S')}\n"
-                                        f"Parcelles éligibles: {parcelles}\n"
-                                        f"Preuves trouvées: {proofs_found_le_8[idx]}\n"
-                                        f"Temps: {temps:.2f} s",
-                                   color=tooltip_color,
-                                   bbox=dict(facecolor=face_color, edgecolor='none'),
-                                   ha='left')
+            # Vérifier si l'artiste est un scatter
+            if artist == scatter_le_8:
+                index = sel.index
+                if 0 <= index < len(timestamps_le_8_filtered):
+                    ts = timestamps_le_8_filtered[index]
+                    parcelles = eligible_plots_le_8[index]
+                    temps = time_taken_le_8_filtered[index]
+                    sel.annotation.set(text=f"{ts.strftime('%d-%m-%Y %H:%M:%S')}\n"
+                                            f"Parcelles éligibles: {parcelles}\n"
+                                            f"Preuves trouvées: {proofs_found_le_8_filtered[index]}\n"
+                                            f"Temps: {temps:.2f} s",
+                                       color=tooltip_color,
+                                       bbox=dict(facecolor=face_color, edgecolor='none'),
+                                       ha='left')
+            elif artist == scatter_gt_8:
+                index = sel.index
+                if 0 <= index < len(timestamps_gt_8_filtered):
+                    ts = timestamps_gt_8_filtered[index]
+                    parcelles = eligible_plots_gt_8[index]
+                    temps = time_taken_gt_8_filtered[index]
+                    sel.annotation.set(text=f"{ts.strftime('%d-%m-%Y %H:%M:%S')}\n"
+                                            f"Parcelles éligibles: {parcelles}\n"
+                                            f"Preuves trouvées: {proofs_found_gt_8_filtered[index]}\n"
+                                            f"Temps: {temps:.2f} s",
+                                       color=tooltip_color,
+                                       bbox=dict(facecolor=face_color, edgecolor='none'),
+                                       ha='left')
             else:
                 sel.annotation.set(text="Aucune donnée disponible",
                                    color=tooltip_color,
@@ -642,94 +802,104 @@ class LogMonitorApp:
         self.canvas1.draw()
 
     def found_proof_graphs(self, timestamps_le_8, time_taken_le_8, eligible_plots_le_8, proofs_found_le_8, timestamps_gt_8, time_taken_gt_8, eligible_plots_gt_8, proofs_found_gt_8):
-        # Efface les tracés précédents
+        # Clear previous plots
         self.ax2.cla()
 
         # Déterminer le début et la fin de la période à afficher
-        # Fin à l'instant actuel
-        end_time = datetime.datetime.now()
-        # Début il y a 30 minutes
-        start_time = end_time - datetime.timedelta(minutes=60)
+        end_time = datetime.now()
+        start_time = end_time - timedelta(minutes=60)
 
-        # Tracer les données filtrées
-        self.ax2.plot(timestamps_le_8, proofs_found_le_8, color='#17D283', marker='o', markersize=4, linestyle='-', label='<= 8 secondes')
-        self.ax2.plot(timestamps_gt_8, proofs_found_gt_8, color='#FF4500', marker='o', markersize=4, linestyle='-', label='> 8 secondes')
+        # Filtrer les données pour la période spécifiée
+        filtered_data_le_8 = [(ts, tt, pf, ep) for ts, tt, pf, ep in zip(timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8) if ts >= start_time and pf > 0]
+        filtered_data_gt_8 = [(ts, tt, pf, ep) for ts, tt, pf, ep in zip(timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8) if ts >= start_time and pf > 0]
 
-        # Configurer le titre et les étiquettes de l'axe
-        self.ax2.set_title('Temps des preuves trouvées sur la dernière heure', color='white')
+        # Plot points where proofs_found_le_8 > 0
+        scatter_le_8 = self.ax2.scatter([ts for ts, _, _, _ in filtered_data_le_8],
+                                        [tt for _, tt, _, _ in filtered_data_le_8],
+                                        color=color_blue, marker='o', label='<= 8 secondes')
+
+        # Plot points where proofs_found_gt_8 > 0
+        scatter_gt_8 = self.ax2.scatter([ts for ts, _, _, _ in filtered_data_gt_8],
+                                        [tt for _, tt, _, _ in filtered_data_gt_8],
+                                        color=color_red, marker='o', label='> 8 secondes')
+
+        # Add background grid
+        self.ax2.axhline(y=8, color=color_white, linestyle='--', linewidth=0.5)
+        self.ax2.set_title('Temps des preuves trouvées sur la dernière heure', color=color_white)
+
+        # Définir le format de l'axe x
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Hh%M'))
-        self.ax2.xaxis.set_major_locator(mdates.MinuteLocator(interval=2))
-        self.ax2.yaxis.set_major_locator(plt.MultipleLocator(1))
-        # self.ax2.legend(loc='upper left')
-
-        # Incline les étiquettes de l'axe X à 45 degrés
-        plt.setp(self.ax2.get_xticklabels(), rotation=45, ha='right')
-
-        # Configurer le style du graphique
-        self.fig2.patch.set_facecolor('#333333')
-        self.ax2.set_facecolor('#333333')
-        self.ax2.tick_params(axis='x', colors='white')
-        self.ax2.tick_params(axis='y', colors='white')
-        self.ax2.spines['bottom'].set_color('white')
-        self.ax2.spines['top'].set_color('white')
-        self.ax2.spines['left'].set_color('white')
-        self.ax2.spines['right'].set_color('white')
-        self.ax2.title.set_color('white')
-        self.ax2.xaxis.label.set_color('white')
-        self.ax2.yaxis.label.set_color('white')
-
-        # Calculer la limite maximale de l'axe Y basée sur proofs_found_gt_8
-        max_proof_found = max(proofs_found_gt_8, default=0)
-        y_upper_limit = max(5, max_proof_found)
-        self.ax2.set_ylim(0, y_upper_limit)
         self.ax2.set_xlim(start_time, end_time)
 
-        # Ajouter le quadrillage à l'arrière-plan
-        self.ax2.grid(True, color='grey', linestyle='--', linewidth=0.5)
+        # Calculer la limite maximale de l'axe Y
+        time_taken_le_8_values = [tt for _, tt, _, _ in filtered_data_le_8]
+        time_taken_gt_8_values = [tt for _, tt, _, _ in filtered_data_gt_8]
+
+        max_time_taken = max(max(time_taken_le_8_values, default=0), max(time_taken_gt_8_values, default=0))
+        y_upper_limit = max_time_taken + 2 if max_time_taken > 10 else 10
+        self.ax2.set_ylim(0, y_upper_limit)
+
+        # Utilisation de MaxNLocator pour limiter le nombre de ticks sur l'axe x
+        self.ax2.xaxis.set_major_locator(ticker.MaxNLocator(20))
+        self.fig2.autofmt_xdate()
 
         # Gestion du curseur
         if self.cursor2:
             self.cursor2.visible = False
 
-        self.cursor2 = mplcursors.cursor(self.ax2, hover=True)
+        self.cursor2 = mplcursors.cursor([scatter_le_8, scatter_gt_8], hover=True)
 
         @self.cursor2.connect("add")
-        def on_add_cursor2(sel, tooltip_color='white', face_color='black'):
-            idx = int(sel.index)  # Utilisation de sel.index au lieu de sel.target.index
+        def on_add_cursor2(sel):
+            tooltip_color = color_white
+            face_color = color_black
+            artist = sel.artist
 
-            if sel.artist.get_label() == '<= 8 secondes':
-                if idx < len(proofs_found_le_8):
-                    timestamp_le_8 = timestamps_le_8[idx].strftime('%d-%m-%Y %H:%M:%S')
+            if artist == scatter_le_8:
+                index = sel.index
+                if 0 <= index < len(filtered_data_le_8):
+                    ts, tt, pf, ep = filtered_data_le_8[index]
+                    timestamp_le_8 = ts.strftime('%d-%m-%Y %H:%M:%S')
                     sel.annotation.set(text=f"{timestamp_le_8}\n"
-                                            f"Parcelles éligibles: {eligible_plots_le_8[idx]}\n"
-                                            f"Preuves trouvées: {proofs_found_le_8[idx]}\n"
-                                            f"Temps: {time_taken_le_8[idx]:.2f}",
+                                            f"Parcelles éligibles: {ep}\n"
+                                            f"Preuves trouvées: {pf}\n"
+                                            f"Temps: {tt:.2f}",
                                        color=tooltip_color,
                                        bbox=dict(facecolor=face_color, edgecolor='none'),
                                        ha='left')
-            elif sel.artist.get_label() == '> 8 secondes':
-                idx -= len(proofs_found_le_8)
-                if idx < len(proofs_found_gt_8):
-                    timestamp_gt_8 = timestamps_gt_8[idx].strftime('%d-%m-%Y %H:%M:%S')
+                else:
+                    sel.annotation.set(text="Aucune donnée disponible",
+                                       color=tooltip_color,
+                                       bbox=dict(facecolor=face_color, edgecolor='none'),
+                                       ha='left')
+
+            elif artist == scatter_gt_8:
+                index = sel.index
+                if 0 <= index < len(filtered_data_gt_8):
+                    ts, tt, pf, ep = filtered_data_gt_8[index]
+                    timestamp_gt_8 = ts.strftime('%d-%m-%Y %H:%M:%S')
                     sel.annotation.set(text=f"{timestamp_gt_8}\n"
-                                            f"Parcelles éligibles: {eligible_plots_gt_8[idx]}\n"
-                                            f"Preuves trouvées: {proofs_found_gt_8[idx]}\n"
-                                            f"Temps: {time_taken_gt_8[idx]:.2f}",
+                                            f"Parcelles éligibles: {ep}\n"
+                                            f"Preuves trouvées: {pf}\n"
+                                            f"Temps: {tt:.2f}",
                                        color=tooltip_color,
                                        bbox=dict(facecolor=face_color, edgecolor='none'),
                                        ha='left')
-            else:
-                sel.annotation.set(text="Aucune donnée disponible",
-                                   color=tooltip_color,
-                                   bbox=dict(facecolor=face_color, edgecolor='none'),
-                                   ha='left')
+                else:
+                    sel.annotation.set(text="Aucune donnée disponible",
+                                       color=tooltip_color,
+                                       bbox=dict(facecolor=face_color, edgecolor='none'),
+                                       ha='left')
 
         # Mettre à jour le canevas
         self.canvas2.draw()
 
-    def maximize_window(self):
-        self.root.state('zoomed')
-        self.root.attributes('-topmost', False)
+    def center_window(self, width, height):
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
 
     def close_app(self):
         self.root.quit()
