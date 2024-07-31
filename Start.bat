@@ -5,4 +5,4 @@ cd /d %~dp0
 title Starting Chia Monitor
 
 :: Lancer Python dans une nouvelle fenêtre
-start "Starting Chia Monitor" python main.py
+start "Starting Chia Monitor" python Chia_Log_Monitor.py
