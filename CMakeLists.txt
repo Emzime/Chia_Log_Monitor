@@ -43,7 +43,7 @@ set(PYINSTALLER_ARGS_AUTONOME
   "--hidden-import=matplotlib.ticker"
   "--hidden-import=matplotlib.backends.backend_tkagg"
   "${CMAKE_SOURCE_DIR}/Chia_Log_Monitor.py"
-  "--distpath=${CMAKE_BINARY_DIR}/dist/Chia Log Monitor Autonome"
+  "--distpath=${CMAKE_BINARY_DIR}/dist/Chia_Log_Monitor_Autonome"
 )
 
 # Définir les arguments PyInstaller pour la version non autonome
