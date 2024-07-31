@@ -109,3 +109,6 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 4. Construction :
    ```bash
    python build.bat
+
+
+![image](https://github.com/user-attachments/assets/702a71fa-c459-4c67-9594-ef9825bc91db)
