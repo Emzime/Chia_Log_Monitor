@@ -1,11 +1,12 @@
 import os
 import platform
 import re
+import sys
 import threading
 import tkinter as tk
 from collections import defaultdict
 from datetime import datetime, timedelta
-from tkinter import messagebox, ttk, filedialog
+from tkinter import filedialog, messagebox, ttk
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
@@ -15,19 +16,18 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # Chemin du log par défaut
 system = platform.system()
-
-personal_log_file = r"\\VM-CHIA\ChiaLog\debug.log"
-
-# Définir le chemin par défaut en fonction du système d'exploitation
-if system == "linux" or system == "linux2":  # Linux
+if system == "Linux":
     default_log_file = os.path.expanduser("~/.chia/mainnet/log/debug.log")
-elif system == "win32":  # Windows
+elif system == "Windows":
     default_log_file = os.path.expandvars(r"%systemdrive%\%homepath%\.chia\mainnet\log\debug.log")
-elif system == "darwin":  # MacOS
+elif system == "Darwin":  # MacOS
     default_log_file = os.path.expanduser("~/Library/Application Support/Chia/mainnet/log/debug.log")
 else:
-    # Si le système n'est pas reconnu, définir un chemin alternatif
-    default_log_file = personal_log_file
+    # Si le système n'est pas reconnu, vous devez définir manuellement le chemin ici
+    default_log_file = ""
+
+personal_log = r'\\VM-CHIA\Log Chia\debug.log'
+# personal_log = r'\\FARMER\log\debug.log'
 
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
 pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
@@ -219,13 +219,15 @@ def print_summary_stats(text_widget):
         "\n:: Infos sur les preuves ::\n"
         f" Total des entrées: {total_entries}\n"
         f" Total des preuves trouvées: {total_proofs_found}\n"
-        f" {last_proof_le_8_time}\n"
-        f" {last_proof_gt_8_time}\n\n"
+        f" {proof_info_le_8}\n"
+        f" {proof_info_gt_8}\n\n"
+
         f" Temps minimal des preuves: {min_proof_time:.2f} secondes\n"
         f" Temps moyen des preuves: {avg_proof_time:.2f} secondes\n"
         f" Temps maximal des preuves: {max_proof_time:.2f} secondes\n\n"
-        f" {proof_info_le_8}\n"
-        f" {proof_info_gt_8}\n"
+
+        f" {last_proof_le_8_time}\n"
+        f" {last_proof_gt_8_time}\n\n"
 
         "\n:: Autres données ::\n"
         f" GigaHorse Fee: {fee_rate}\n"
@@ -331,6 +333,12 @@ def format_elapsed_time(elapsed_time):
     return formatted_time
 
 
+def resource_path(relative_path):
+    """Obtenir le chemin absolu vers la ressource, fonctionne pour dev et pour PyInstaller."""
+    base_path = getattr(sys, '_MEIPASS', os.path.abspath('.'))
+    return os.path.join(base_path, relative_path)
+
+
 class LogMonitorApp:
     def __init__(self, root):
         # Initialisation de l'application et des variables
@@ -338,13 +346,15 @@ class LogMonitorApp:
         self.root.title("Chia Log Monitor")
         # Set dark background for the root window
         self.root.configure(bg=color_dark_gray)
-        self.root.iconbitmap('icon.ico')
+
+        # Construire le chemin complet de l'icône
+        self.root.iconbitmap(resource_path("images/icon.ico"))
+
+        # Centrer sur l'écran
         self.center_window(1750, 768)
 
         # Indicateur de chargement du log
         self.log_loaded = False
-        # Initialize thread attribute
-        self.monitor_thread = None
         # Verrou pour synchroniser l'accès à log_loaded
         self.log_loaded_lock = threading.Lock()
         self.last_file_size = 0
@@ -388,12 +398,6 @@ class LogMonitorApp:
         self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
 
         self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.load_log_file(), bg='#999999', fg='#000000')
-        self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 5), sticky=tk.N)
-
-        self.frame = tk.Frame(self.root, bg=color_dark_gray)
-        self.frame.grid(row=0, column=0, columnspan=2, sticky=tk.NSEW)
-
-        self.load_button = tk.Button(self.frame, text="Charger le fichier de logs", command=lambda: self.choose_log_file(), bg='#999999', fg='#000000')
         self.load_button.grid(row=0, column=0, columnspan=2, padx=10, pady=(20, 5), sticky=tk.N)
 
         self.top_frame = tk.Frame(self.frame, bg=color_dark_gray)
@@ -479,34 +483,34 @@ class LogMonitorApp:
         self.cursor1 = None
         self.cursor2 = None
 
-        # Configurer le style du graphique
+        # Sets the style of the chart
         self.fig1.patch.set_facecolor(color_dark_gray)
         self.ax1.set_facecolor(color_dark_gray)
-        self.ax1.tick_params(axis='x', colors=color_white)
-        self.ax1.tick_params(axis='y', colors=color_white)
-        self.ax1.spines['bottom'].set_color(color_white)
+        self.ax1.tick_params(axis='x', colors=color_dark_gray)
+        self.ax1.tick_params(axis='y', colors=color_dark_gray)
+        self.ax1.spines['bottom'].set_color(color_dark_gray)
         self.ax1.spines['top'].set_color(color_dark_gray)
-        self.ax1.spines['left'].set_color(color_white)
+        self.ax1.spines['left'].set_color(color_dark_gray)
         self.ax1.spines['right'].set_color(color_dark_gray)
         self.ax1.title.set_color(color_white)
-        self.ax1.xaxis.label.set_color(color_white)
-        self.ax1.yaxis.label.set_color(color_white)
+        self.ax1.xaxis.label.set_color(color_dark_gray)
+        self.ax1.yaxis.label.set_color(color_dark_gray)
 
-        # Configurer le style du graphique
+        # Sets the style of the chart
         self.fig2.patch.set_facecolor(color_dark_gray)
         self.ax2.set_facecolor(color_dark_gray)
-        self.ax2.tick_params(axis='x', colors=color_white)
-        self.ax2.tick_params(axis='y', colors=color_white)
-        self.ax2.spines['bottom'].set_color(color_white)
+        self.ax2.tick_params(axis='x', colors=color_dark_gray)
+        self.ax2.tick_params(axis='y', colors=color_dark_gray)
+        self.ax2.spines['bottom'].set_color(color_dark_gray)
         self.ax2.spines['top'].set_color(color_dark_gray)
-        self.ax2.spines['left'].set_color(color_white)
+        self.ax2.spines['left'].set_color(color_dark_gray)
         self.ax2.spines['right'].set_color(color_dark_gray)
         self.ax2.title.set_color(color_white)
-        self.ax2.xaxis.label.set_color(color_white)
-        self.ax2.yaxis.label.set_color(color_white)
+        self.ax2.xaxis.label.set_color(color_dark_gray)
+        self.ax2.yaxis.label.set_color(color_dark_gray)
 
-        # Lecture automatique du fichier de log a l'ouverture si celui-ci existe
-        self.load_log_file()
+        # Load default log file and start periodic update
+        self.load_default_log_file()
 
         if not self.log_loaded:
             self.update_ui()
@@ -572,12 +576,33 @@ class LogMonitorApp:
             # Signalisation de la fin du chargement
             self.log_loaded = True
 
+    def load_log_file(self):
+        # Réinitialiser le statut de chargement
+        self.log_loaded = False
+
+        file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log")])
+        if file_path:
+            self.root.after(50, self.start_read_log_file, file_path)
+
+    def load_default_log_file(self):
+        # Réinitialiser le statut de chargement
+        self.log_loaded = False
+
+        if os.path.exists(default_log_file):
+            self.root.after(50, self.start_read_log_file, default_log_file)
+        elif os.path.exists(personal_log):
+            self.root.after(50, self.start_read_log_file, personal_log)
+        else:
+            messagebox.showerror("Erreur de fichier", "Les fichiers de log sont introuvables.")
+
     def read_new_lines(self, file_path):
         current_size = os.path.getsize(file_path)
         if current_size > self.last_file_size:
             with open(file_path, 'r') as file:
+                # Commencez à lire à partir de la dernière position lue
                 file.seek(self.last_file_size)
                 new_lines = file.readlines()
+                # Mettre à jour la dernière taille du fichier
                 self.last_file_size = current_size
 
                 for line in new_lines:
@@ -594,108 +619,129 @@ class LogMonitorApp:
                             parse_giga_horse_info(line)
 
                 self.update_ui()
-                self.plot_data()
 
-    def choose_log_file(self):
-        # Sinon, permettre à l'utilisateur de sélectionner un fichier
-        file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log")])
-        if file_path:
-            self.start_read_log_file(file_path)
-
-    def load_log_file(self):
-        # Vérifier si une surveillance est déjà en cours
-        if self.monitor_thread and self.monitor_thread.is_alive():
-            return
-
-        # Vérifier si le fichier par défaut existe
-        if os.path.isfile(default_log_file):
-            # Si le fichier par défaut existe, démarrer la lecture du fichier
-            self.start_read_log_file(default_log_file)
-        else:
-            # Sinon, permettre à l'utilisateur de sélectionner un fichier
-            file_path = filedialog.askopenfilename(filetypes=[("Log Files", "*.log")])
-            if file_path:
-                self.start_read_log_file(file_path)
-
-    def update_log_file(self):
-        self.read_new_lines(self.monitor_file_path)
-        self.root.after(1000, self.update_log_file)
+                if hasattr(self, 'log_loaded') and self.log_loaded:
+                    self.plot_data()
+                    self.set_chart_style()
 
     def start_monitoring(self, file_path):
         self.last_file_size = os.path.getsize(file_path)
         self.monitor_file_path = file_path
         self.root.after(1000, self.update_log_file)
 
+    def update_log_file(self):
+        self.read_new_lines(self.monitor_file_path)
+        self.root.after(1000, self.update_log_file)
+
     def start_read_log_file(self, file_path):
-        # Start the log file reading in a separate thread
-        if self.monitor_thread is not None and self.monitor_thread.is_alive():
-            self.monitor_thread.join()
-
-        self.monitor_thread = threading.Thread(target=self.read_log_file, args=(file_path,))
-        self.monitor_thread.daemon = True
-        self.monitor_thread.start()
-
-        # Start monitoring file changes
+        thread = threading.Thread(target=self.read_log_file, args=(file_path,))
+        thread.daemon = True
+        thread.start()
         self.start_monitoring(file_path)
 
     def update_periodically(self):
+        # Update UI periodically
         self.update_ui()
-        self.root.after(5000, self.update_periodically)
+        self.root.after(1000, self.update_periodically)
+
+        if hasattr(self, 'log_loaded') and self.log_loaded:
+            self.plot_data()
+            self.set_chart_style()
 
     def update_ui(self):
-        if hasattr(self, 'log_loaded') and self.log_loaded:
-            current_summary_yview = self.summary_text.yview()
-            current_stats_yview = self.stats_text.yview()
+        # Sauvegarder la position actuelle de défilement
+        current_summary_yview = self.summary_text.yview()
+        current_stats_yview = self.stats_text.yview()
 
-            print_summary(self.summary_text)
-            print_summary_stats(self.stats_text)
+        # Mettre à jour le texte de résumé et les statistiques
+        print_summary(self.summary_text)
+        print_summary_stats(self.stats_text)
 
-            self.summary_text.yview_moveto(current_summary_yview[0])
-            self.stats_text.yview_moveto(current_stats_yview[0])
+        # Restaurez la position de défilement
+        self.summary_text.yview_moveto(current_summary_yview[0])
+        self.stats_text.yview_moveto(current_stats_yview[0])
 
-            self.summary_text.see(tk.END)
-            self.stats_text.see(tk.END)
+        self.summary_text.see(tk.END)
+        self.stats_text.see(tk.END)
 
-        else:
-            self.summary_text.delete(1.0, tk.END)
-            self.summary_text.insert(tk.END, "Chargement en cours...")
-            self.summary_text.see(tk.END)
+    def set_chart_style(self):
+        # Sets the style of the chart
+        self.fig1.patch.set_facecolor(color_dark_gray)
+        self.ax1.set_facecolor(color_dark_gray)
+        self.ax1.tick_params(axis='x', colors=color_white)
+        self.ax1.tick_params(axis='y', colors=color_white)
+        self.ax1.spines['bottom'].set_color(color_white)
+        self.ax1.spines['top'].set_color(color_dark_gray)
+        self.ax1.spines['left'].set_color(color_white)
+        self.ax1.spines['right'].set_color(color_dark_gray)
+        self.ax1.title.set_color(color_white)
+        self.ax1.xaxis.label.set_color(color_white)
+        self.ax1.yaxis.label.set_color(color_white)
 
-            self.stats_text.delete(1.0, tk.END)
-            self.stats_text.insert(tk.END, "Chargement en cours...")
-            self.stats_text.see(tk.END)
+        # Sets the style of the chart
+        self.fig2.patch.set_facecolor(color_dark_gray)
+        self.ax2.set_facecolor(color_dark_gray)
+        self.ax2.tick_params(axis='x', colors=color_white)
+        self.ax2.tick_params(axis='y', colors=color_white)
+        self.ax2.spines['bottom'].set_color(color_white)
+        self.ax2.spines['top'].set_color(color_dark_gray)
+        self.ax2.spines['left'].set_color(color_white)
+        self.ax2.spines['right'].set_color(color_dark_gray)
+        self.ax2.title.set_color(color_white)
+        self.ax2.xaxis.label.set_color(color_white)
+        self.ax2.yaxis.label.set_color(color_white)
 
     def plot_data(self):
-        if not log_data['timestamp']:
-            return
+        if hasattr(self, 'log_loaded') and self.log_loaded:
+            if not log_data['timestamp']:
+                return
 
-        now = datetime.now()
-        start_time = now - timedelta(minutes=60)
+            # Calculer l'heure actuelle moins une heure
+            now = datetime.now()
+            start_time = now - timedelta(minutes=60)
 
-        filtered_data = {
-            '<= 8 sec': [],
-            '> 8 sec': []
-        }
+            # Filtrer les données pour ne garder que celles dans l'intervalle de la dernière heure
+            filtered_data = {
+                '<= 8 sec': [],
+                '> 8 sec': []
+            }
 
-        for timestamp, time_taken, proofs_found, eligible_plots in zip(log_data['timestamp'], log_data['time_taken'], log_data['proofs_found'], log_data['eligible_plots']):
-            if timestamp >= start_time:
-                if time_taken <= 8:
-                    filtered_data['<= 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
-                else:
-                    filtered_data['> 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
+            for timestamp, time_taken, proofs_found, eligible_plots in zip(log_data['timestamp'], log_data['time_taken'], log_data['proofs_found'], log_data['eligible_plots']):
+                if timestamp >= start_time:
+                    if time_taken <= 8:
+                        filtered_data['<= 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
+                    else:
+                        filtered_data['> 8 sec'].append((timestamp, time_taken, proofs_found, eligible_plots))
 
-        timestamps_le_8 = [data[0] for data in filtered_data['<= 8 sec']]
-        time_taken_le_8 = [data[1] for data in filtered_data['<= 8 sec']]
-        proofs_found_le_8 = [data[2] for data in filtered_data['<= 8 sec']]
-        eligible_plots_le_8 = [data[3] for data in filtered_data['<= 8 sec']]
+            # Préparer les données pour le graphique 1 (<= 8 secondes)
+            timestamps_le_8 = [data[0] for data in filtered_data['<= 8 sec']]
+            time_taken_le_8 = [data[1] for data in filtered_data['<= 8 sec']]
+            proofs_found_le_8 = [data[2] for data in filtered_data['<= 8 sec']]
+            eligible_plots_le_8 = [data[3] for data in filtered_data['<= 8 sec']]
 
-        timestamps_gt_8 = [data[0] for data in filtered_data['> 8 sec']]
-        time_taken_gt_8 = [data[1] for data in filtered_data['> 8 sec']]
-        proofs_found_gt_8 = [data[2] for data in filtered_data['> 8 sec']]
-        eligible_plots_gt_8 = [data[3] for data in filtered_data['> 8 sec']]
+            # Préparer les données pour le graphique 2 (> 8 secondes)
+            timestamps_gt_8 = [data[0] for data in filtered_data['> 8 sec']]
+            time_taken_gt_8 = [data[1] for data in filtered_data['> 8 sec']]
+            proofs_found_gt_8 = [data[2] for data in filtered_data['> 8 sec']]
+            eligible_plots_gt_8 = [data[3] for data in filtered_data['> 8 sec']]
 
-        self.all_proof_graphs(timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8, timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8)
-        self.found_proof_graphs(timestamps_le_8, time_taken_le_8, eligible_plots_le_8, proofs_found_le_8, timestamps_gt_8, time_taken_gt_8, eligible_plots_gt_8, proofs_found_gt_8)
+            # Filtrer les données avec preuves trouvées pour all_proof_graphs
+            self.all_proof_graphs(timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8, timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8)
+
+            # Filtrer les données avec preuves trouvées > 0 pour found_proof_graph
+            timestamps_le_8_filtered, proofs_found_le_8_filtered, time_taken_le_8_filtered, eligible_plots_le_8_filtered = self.filter_data(timestamps_le_8, proofs_found_le_8, time_taken_le_8, eligible_plots_le_8)
+            timestamps_gt_8_filtered, proofs_found_gt_8_filtered, time_taken_gt_8_filtered, eligible_plots_gt_8_filtered = self.filter_data(timestamps_gt_8, proofs_found_gt_8, time_taken_gt_8, eligible_plots_gt_8)
+            self.found_proof_graphs(timestamps_le_8_filtered, time_taken_le_8_filtered, eligible_plots_le_8_filtered, proofs_found_le_8_filtered, timestamps_gt_8_filtered, time_taken_gt_8_filtered, eligible_plots_gt_8_filtered,
+                                    proofs_found_gt_8_filtered)
+
+    @staticmethod
+    def filter_data(timestamps, proofs_found, time_taken, eligible_plots):
+        timestamps_filtered = [ts for ts, proof in zip(timestamps, proofs_found) if proof > 0]
+        proofs_found_filtered = [proof for proof in proofs_found if proof > 0]
+        time_taken_filtered = [time for time, proof in zip(time_taken, proofs_found) if proof > 0]
+        eligible_plots_filtered = [plots for plots, proof in zip(eligible_plots, proofs_found) if proof > 0]
+
+        return timestamps_filtered, proofs_found_filtered, time_taken_filtered, eligible_plots_filtered
 
     def all_proof_graphs(self, timestamps_le_8, time_taken_le_8, proofs_found_le_8, eligible_plots_le_8, timestamps_gt_8, time_taken_gt_8, proofs_found_gt_8, eligible_plots_gt_8):
         # Efface les tracés précédents
@@ -713,9 +759,6 @@ class LogMonitorApp:
         timestamps_gt_8_filtered = [ts for ts in timestamps_gt_8 if ts >= start_time]
         time_taken_gt_8_filtered = [time_taken_gt_8[i] for i, ts in enumerate(timestamps_gt_8) if ts >= start_time]
         proofs_found_gt_8_filtered = [proofs_found_gt_8[i] for i, ts in enumerate(timestamps_gt_8) if ts >= start_time]
-
-        # Tracer les lignes pour <= 8 secondes
-        # line_le_8, = self.ax1.plot(timestamps_le_8_filtered, time_taken_le_8_filtered, color=color_green, linestyle='-', label='<= 8 secondes')
 
         # Ajouter des marqueurs pour <= 8 secondes sans relier avec des lignes
         scatter_le_8 = self.ax1.scatter(timestamps_le_8_filtered, time_taken_le_8_filtered, color=color_green, marker='o', s=25)
@@ -793,7 +836,7 @@ class LogMonitorApp:
                                        bbox=dict(facecolor=face_color, edgecolor='none'),
                                        ha='left')
             else:
-                sel.annotation.set(text="Aucune donnée disponible",
+                sel.annotation.set(text="",
                                    color=tooltip_color,
                                    bbox=dict(facecolor=face_color, edgecolor='none'),
                                    ha='left')
@@ -867,11 +910,6 @@ class LogMonitorApp:
                                        color=tooltip_color,
                                        bbox=dict(facecolor=face_color, edgecolor='none'),
                                        ha='left')
-                else:
-                    sel.annotation.set(text="Aucune donnée disponible",
-                                       color=tooltip_color,
-                                       bbox=dict(facecolor=face_color, edgecolor='none'),
-                                       ha='left')
 
             elif artist == scatter_gt_8:
                 index = sel.index
@@ -882,11 +920,6 @@ class LogMonitorApp:
                                             f"Parcelles éligibles: {ep}\n"
                                             f"Preuves trouvées: {pf}\n"
                                             f"Temps: {tt:.2f}",
-                                       color=tooltip_color,
-                                       bbox=dict(facecolor=face_color, edgecolor='none'),
-                                       ha='left')
-                else:
-                    sel.annotation.set(text="Aucune donnée disponible",
                                        color=tooltip_color,
                                        bbox=dict(facecolor=face_color, edgecolor='none'),
                                        ha='left')
