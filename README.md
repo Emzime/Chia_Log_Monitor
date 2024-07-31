@@ -97,8 +97,7 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 5. Construction :
    ```bash
    python build.sh
-
-
+<br><br>
 **Build sur Windows**  
 1. Cloner le dépôt Git :  
    ```bash
