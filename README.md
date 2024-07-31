@@ -78,6 +78,7 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 - GCC (MinGW pour Windows)  
 - PyInstaller
 <br><br>
+
 **Build sur Linux**  
 1. Cloner le dépôt Git :  
    ```bash
