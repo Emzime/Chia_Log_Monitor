@@ -69,9 +69,7 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 - **Fonction principale (`main`)**  
   Crée une instance de l'application `LogMonitorApp`.  
   Lance la boucle principale de Tkinter.
-
-
-
+<br><br><br>
 ## Installation et Construction
 
 **Prérequis**  
@@ -79,8 +77,7 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 - CMake 3.5 ou supérieur  
 - GCC (MinGW pour Windows)  
 - PyInstaller
-
-
+<br><br>
 **Build sur Linux**  
 1. Cloner le dépôt Git :  
    ```bash
