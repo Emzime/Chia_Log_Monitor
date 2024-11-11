@@ -26,7 +26,7 @@ else:
     # Si le système n'est pas reconnu, vous devez définir manuellement le chemin ici
     default_log_file = ""
 
-personal_log = r'\\VM-CHIA\Log Chia\debug.log'
+personal_log = r'\\VM-CHIA\.chia\mainnet\log\debug.log'
 # personal_log = r'\\FARMER\log\debug.log'
 
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
