@@ -29,9 +29,10 @@ else:
 personal_log = r'\\VM-CHIA\.chia\mainnet\log\debug.log'
 # personal_log = r'\\FARMER\log\debug.log'
 
-log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
-pool_info_pattern = re.compile(r"GET /pool_info response: ({.*})")
-farmer_info_pattern = re.compile(r"GET /farmer response: ({.*})")
+# Regex de recherche des logs
+log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) \S+ harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
+pool_info_pattern = re.compile(r"GET /pool_info response:\s+({.*})")
+farmer_info_pattern = re.compile(r"GET /farmer response:\s+({.*})")
 giga_horse_fee_pattern = re.compile(r"fee_rate = (?P<fee_rate>\d+\.\d+) %")
 points_pattern = re.compile(r"Points: (\d+)")
 
