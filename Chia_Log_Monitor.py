@@ -22,12 +22,8 @@ elif system == "Windows":
     default_log_file = os.path.expandvars(r"%systemdrive%\%homepath%\.chia\mainnet\log\debug.log")
 elif system == "Darwin":  # MacOS
     default_log_file = os.path.expanduser("~/Library/Application Support/Chia/mainnet/log/debug.log")
-else:
-    # Si le système n'est pas reconnu, vous devez définir manuellement le chemin ici
-    default_log_file = ""
 
 personal_log = r'\\VM-CHIA\.chia\mainnet\log\debug.log'
-# personal_log = r'\\FARMER\log\debug.log'
 
 # Regex de recherche des logs
 log_pattern = re.compile(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}) \S+ harvester chia\.harvester\.harvester: INFO\s+(\d+) plots were eligible for farming \w+\.\.\. Found (\d+) proofs\. Time: ([\d.]+) s\. Total (\d+) plots')
@@ -589,10 +585,10 @@ class LogMonitorApp:
         # Réinitialiser le statut de chargement
         self.log_loaded = False
 
-        if os.path.exists(default_log_file):
-            self.root.after(50, self.start_read_log_file, default_log_file)
-        elif os.path.exists(personal_log):
+        if os.path.exists(personal_log):
             self.root.after(50, self.start_read_log_file, personal_log)
+        elif os.path.exists(default_log_file):
+            self.root.after(50, self.start_read_log_file, default_log_file)
         else:
             messagebox.showerror("Erreur de fichier", "Les fichiers de log sont introuvables.")
 

@@ -14,7 +14,7 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
   Configure les couleurs et les polices.
 
 - **Lecture du fichier de log (`read_log_file`)**  
-  Lit le fichier de log ligne par ligne.  
+  Lit le fichier de log, ligne par ligne.  
   Met à jour la barre de progression.  
   Stocke les données lues dans `log_data`.  
   Utilise des fonctions de parsing pour extraire des informations spécifiques à partir des lignes du log.
@@ -35,11 +35,11 @@ Elle lit les fichiers de log, extrait des informations spécifiques, et affiche 
 
 - **Démarrer la surveillance du fichier (`start_monitoring`)**  
   Initialise la surveillance du fichier en enregistrant la taille actuelle du fichier.  
-  Démarre une boucle de mise à jour périodique.
+  Commence une boucle de mise à jour périodique.
 
 - **Démarrer la lecture du fichier de log (`start_read_log_file`)**  
   Lance la lecture du fichier de log dans un thread séparé pour ne pas bloquer l'interface utilisateur.  
-  Démarre la surveillance des changements du fichier.
+  Commence la surveillance des changements du fichier.
 
 - **Mise à jour périodique de l'interface (`update_periodically`)**  
   Appelle `update_ui` périodiquement pour rafraîchir l'interface utilisateur.
